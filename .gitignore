@@ -1,0 +1,14 @@
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# .NET Build Results
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.pdb
+*.dll
+*.exe

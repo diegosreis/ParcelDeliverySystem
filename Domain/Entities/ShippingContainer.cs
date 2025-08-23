@@ -3,14 +3,14 @@ using Domain.Validation;
 
 namespace Domain.Entities;
 
-public class Container
+public class ShippingContainer
 {
-    private Container()
+    private ShippingContainer()
     {
         Parcels = [];
     } // EF Core constructor
 
-    public Container(string containerId, DateTime shippingDate)
+    public ShippingContainer(string containerId, DateTime shippingDate)
     {
         Id = Guid.NewGuid();
 

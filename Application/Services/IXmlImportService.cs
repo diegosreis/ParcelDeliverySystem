@@ -4,7 +4,7 @@ namespace Application.Services;
 
 public interface IXmlImportService
 {
-    Task<ContainerWithParcelsDto> ImportContainerFromXmlAsync(string xmlContent);
-    Task<ContainerWithParcelsDto> ImportContainerFromFileAsync(string filePath);
+    Task<ShippingContainerWithParcelsDto> ImportContainerFromXmlAsync(string xmlContent);
+    Task<ShippingContainerWithParcelsDto> ImportContainerFromFileAsync(string filePath);
     Task<bool> ValidateXmlContentAsync(string xmlContent);
 }

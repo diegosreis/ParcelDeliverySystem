@@ -3,7 +3,6 @@ using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
 using Moq;
-using Container = Domain.Entities.Container;
 
 namespace Tests.Application.Services;
 
@@ -42,19 +41,20 @@ public class XmlImportServiceTests
                                              </Container>
                                              """;
 
-    private readonly Mock<IContainerRepository> _mockContainerRepository;
     private readonly Mock<IDepartmentRepository> _mockDepartmentRepository;
     private readonly Mock<IParcelRepository> _mockParcelRepository;
+
+    private readonly Mock<IShippingContainerRepository> _mockShippingContainerRepository;
     private readonly XmlImportService _xmlImportService;
 
     public XmlImportServiceTests()
     {
-        _mockContainerRepository = new Mock<IContainerRepository>();
+        _mockShippingContainerRepository = new Mock<IShippingContainerRepository>();
         _mockParcelRepository = new Mock<IParcelRepository>();
         _mockDepartmentRepository = new Mock<IDepartmentRepository>();
 
         _xmlImportService = new XmlImportService(
-            _mockContainerRepository.Object,
+            _mockShippingContainerRepository.Object,
             _mockParcelRepository.Object,
             _mockDepartmentRepository.Object);
     }
@@ -72,7 +72,7 @@ public class XmlImportServiceTests
     {
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
-            new XmlImportService(_mockContainerRepository.Object, null!, _mockDepartmentRepository.Object));
+            new XmlImportService(_mockShippingContainerRepository.Object, null!, _mockDepartmentRepository.Object));
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public class XmlImportServiceTests
     {
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
-            new XmlImportService(_mockContainerRepository.Object, _mockParcelRepository.Object, null!));
+            new XmlImportService(_mockShippingContainerRepository.Object, _mockParcelRepository.Object, null!));
     }
 
     [Fact]
@@ -137,13 +137,13 @@ public class XmlImportServiceTests
     public async Task ImportContainerFromXmlAsync_WithValidXml_ShouldReturnContainerDto()
     {
         // Arrange
-        var testContainer = new Container("Container_68465468", new DateTime(2019, 3, 7));
+        var testContainer = new ShippingContainer("Container_68465468", new DateTime(2019, 3, 7));
 
-        _mockContainerRepository.Setup(x => x.GetByContainerIdAsync("Container_68465468"))
-            .ReturnsAsync((Container)null!);
-        _mockContainerRepository.Setup(x => x.AddAsync(It.IsAny<Container>()))
+        _mockShippingContainerRepository.Setup(x => x.GetByContainerIdAsync("Container_68465468"))
+            .ReturnsAsync((ShippingContainer)null!);
+        _mockShippingContainerRepository.Setup(x => x.AddAsync(It.IsAny<ShippingContainer>()))
             .ReturnsAsync(testContainer);
-        _mockContainerRepository.Setup(x => x.UpdateAsync(It.IsAny<Container>()))
+        _mockShippingContainerRepository.Setup(x => x.UpdateAsync(It.IsAny<ShippingContainer>()))
             .ReturnsAsync(testContainer);
         _mockParcelRepository.Setup(x => x.AddAsync(It.IsAny<Parcel>()))
             .ReturnsAsync((Parcel parcel) => parcel);
@@ -200,8 +200,8 @@ public class XmlImportServiceTests
     public async Task ImportContainerFromXmlAsync_WithExistingContainer_ShouldThrowInvalidOperationException()
     {
         // Arrange
-        var existingContainer = new Container("Container_68465468", new DateTime(2019, 3, 7));
-        _mockContainerRepository.Setup(x => x.GetByContainerIdAsync("Container_68465468"))
+        var existingContainer = new ShippingContainer("Container_68465468", new DateTime(2019, 3, 7));
+        _mockShippingContainerRepository.Setup(x => x.GetByContainerIdAsync("Container_68465468"))
             .ReturnsAsync(existingContainer);
 
         // Act & Assert
@@ -217,13 +217,13 @@ public class XmlImportServiceTests
         var tempFilePath = Path.GetTempFileName();
         await File.WriteAllTextAsync(tempFilePath, ValidXmlContent);
 
-        var testContainer = new Container("Container_68465468", new DateTime(2019, 3, 7));
+        var testContainer = new ShippingContainer("Container_68465468", new DateTime(2019, 3, 7));
 
-        _mockContainerRepository.Setup(x => x.GetByContainerIdAsync("Container_68465468"))
-            .ReturnsAsync((Container)null!);
-        _mockContainerRepository.Setup(x => x.AddAsync(It.IsAny<Container>()))
+        _mockShippingContainerRepository.Setup(x => x.GetByContainerIdAsync("Container_68465468"))
+            .ReturnsAsync((ShippingContainer)null!);
+        _mockShippingContainerRepository.Setup(x => x.AddAsync(It.IsAny<ShippingContainer>()))
             .ReturnsAsync(testContainer);
-        _mockContainerRepository.Setup(x => x.UpdateAsync(It.IsAny<Container>()))
+        _mockShippingContainerRepository.Setup(x => x.UpdateAsync(It.IsAny<ShippingContainer>()))
             .ReturnsAsync(testContainer);
         _mockParcelRepository.Setup(x => x.AddAsync(It.IsAny<Parcel>()))
             .ReturnsAsync((Parcel parcel) => parcel);
@@ -279,12 +279,12 @@ public class XmlImportServiceTests
     public async Task ImportContainerFromXmlAsync_WhenRepositoryThrowsException_ShouldThrowInvalidOperationException()
     {
         // Arrange
-        _mockContainerRepository.Setup(x => x.GetByContainerIdAsync(It.IsAny<string>()))
+        _mockShippingContainerRepository.Setup(x => x.GetByContainerIdAsync(It.IsAny<string>()))
             .ThrowsAsync(new Exception("Database error"));
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             _xmlImportService.ImportContainerFromXmlAsync(ValidXmlContent));
-        Assert.Contains("Error importing container", exception.Message);
+        Assert.Contains("Failed to import container from XML", exception.Message);
     }
 }

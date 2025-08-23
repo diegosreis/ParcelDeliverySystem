@@ -4,24 +4,23 @@ using Application.DTOs;
 using Application.Models;
 using Domain.Entities;
 using Domain.Interfaces;
-using Container = Domain.Entities.Container;
 
 namespace Application.Services;
 
 public class XmlImportService(
-    IContainerRepository containerRepository,
+    IShippingContainerRepository shippingContainerRepository,
     IParcelRepository parcelRepository,
     IDepartmentRepository departmentRepository)
     : IXmlImportService
 {
-    private readonly IContainerRepository _containerRepository =
-        containerRepository ?? throw new ArgumentNullException(nameof(containerRepository));
-
     private readonly IDepartmentRepository _departmentRepository =
         departmentRepository ?? throw new ArgumentNullException(nameof(departmentRepository));
 
     private readonly IParcelRepository _parcelRepository =
         parcelRepository ?? throw new ArgumentNullException(nameof(parcelRepository));
+
+    private readonly IShippingContainerRepository _shippingContainerRepository =
+        shippingContainerRepository ?? throw new ArgumentNullException(nameof(shippingContainerRepository));
 
     public Task<bool> ValidateXmlContentAsync(string xmlContent)
     {
@@ -40,7 +39,7 @@ public class XmlImportService(
         }
     }
 
-    public async Task<ContainerWithParcelsDto> ImportContainerFromXmlAsync(string xmlContent)
+    public async Task<ShippingContainerWithParcelsDto> ImportContainerFromXmlAsync(string xmlContent)
     {
         if (string.IsNullOrWhiteSpace(xmlContent))
             throw new ArgumentException("XML content cannot be empty", nameof(xmlContent));
@@ -52,17 +51,13 @@ public class XmlImportService(
 
             return MapToContainerWithParcelsDto(container);
         }
-        catch (Exception ex) when (ex is XmlException || ex is InvalidOperationException)
-        {
-            throw new InvalidOperationException("Error processing XML: " + ex.Message, ex);
-        }
         catch (Exception ex)
         {
-            throw new InvalidOperationException("Error importing container: " + ex.Message, ex);
+            throw new InvalidOperationException($"Failed to import container from XML: {ex.Message}", ex);
         }
     }
 
-    public async Task<ContainerWithParcelsDto> ImportContainerFromFileAsync(string filePath)
+    public async Task<ShippingContainerWithParcelsDto> ImportContainerFromFileAsync(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("File path cannot be empty", nameof(filePath));
@@ -88,16 +83,16 @@ public class XmlImportService(
         }
     }
 
-    private async Task<Container> CreateContainerFromXmlAsync(ContainerXml containerXml)
+    private async Task<ShippingContainer> CreateContainerFromXmlAsync(ContainerXml containerXml)
     {
         // Check if container already exists
-        var existingContainer = await _containerRepository.GetByContainerIdAsync(containerXml.Id);
+        var existingContainer = await _shippingContainerRepository.GetByContainerIdAsync(containerXml.Id);
         if (existingContainer != null)
             throw new InvalidOperationException($"Container with ID {containerXml.Id} already exists");
 
         // Create container
-        var container = new Container(containerXml.Id, containerXml.ShippingDate);
-        container = await _containerRepository.AddAsync(container);
+        var container = new ShippingContainer(containerXml.Id, containerXml.ShippingDate);
+        container = await _shippingContainerRepository.AddAsync(container);
 
         // Process parcels
         foreach (var parcelXml in containerXml.Parcels)
@@ -107,7 +102,7 @@ public class XmlImportService(
         }
 
         // Update container with parcels
-        await _containerRepository.UpdateAsync(container);
+        await _shippingContainerRepository.UpdateAsync(container);
 
         return container;
     }
@@ -134,14 +129,14 @@ public class XmlImportService(
         return await _parcelRepository.AddAsync(parcel);
     }
 
-    private static ContainerWithParcelsDto MapToContainerWithParcelsDto(Container container)
+    private static ShippingContainerWithParcelsDto MapToContainerWithParcelsDto(ShippingContainer container)
     {
-        return new ContainerWithParcelsDto(
+        return new ShippingContainerWithParcelsDto(
             container.Id,
             container.ContainerId,
             container.ShippingDate,
             container.Status,
-            container.Parcels.Select(MapToParcelDto),
+            container.Parcels.Select(MapToParcelDto).ToList(),
             container.TotalParcels,
             container.TotalWeight,
             container.TotalValue,

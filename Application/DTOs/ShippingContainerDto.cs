@@ -2,7 +2,7 @@ using Domain.Enums;
 
 namespace Application.DTOs;
 
-public record ContainerDto(
+public record ShippingContainerDto(
     Guid Id,
     string ContainerId,
     DateTime ShippingDate,
@@ -15,21 +15,22 @@ public record ContainerDto(
     DateTime? UpdatedAt
 );
 
-public record CreateContainerDto(
+public record CreateShippingContainerDto(
     string ContainerId,
     DateTime ShippingDate
 );
 
-public record UpdateContainerDto(
-    DateTime ShippingDate
+public record UpdateShippingContainerDto(
+    DateTime ShippingDate,
+    ContainerStatus Status
 );
 
-public record ContainerWithParcelsDto(
+public record ShippingContainerWithParcelsDto(
     Guid Id,
     string ContainerId,
     DateTime ShippingDate,
     ContainerStatus Status,
-    IEnumerable<ParcelDto> Parcels,
+    List<ParcelDto> Parcels,
     int TotalParcels,
     decimal TotalWeight,
     decimal TotalValue,

@@ -2,13 +2,13 @@ using Domain.Validation;
 
 namespace Domain.Entities;
 
-public abstract class Address
+public class Address
 {
     private Address()
     {
     } // EF Core constructor
 
-    protected Address(string street, string number, string complement, string neighborhood,
+    public Address(string street, string number, string complement, string neighborhood,
         string city, string state, string zipCode, string country = "Nederlands")
     {
         Id = Guid.NewGuid();
@@ -50,5 +50,20 @@ public abstract class Address
         Country = Guard.Required(country, nameof(country), FieldNames.Country);
 
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    public string GetFormattedAddress()
+    {
+        var parts = new List<string>
+        {
+            $"{Street}, {Number}",
+            Complement,
+            Neighborhood,
+            $"{City} - {State}",
+            ZipCode,
+            Country
+        };
+
+        return string.Join(", ", parts.Where(p => !string.IsNullOrEmpty(p)));
     }
 }

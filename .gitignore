@@ -19,3 +19,8 @@
 *.suo
 *.cache
 *.log
+
+# Test Results
+[Tt]est[Rr]esult*/
+*.coverage
+*.coveragexml

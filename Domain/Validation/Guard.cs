@@ -49,6 +49,14 @@ public static class Guard
 
         throw new ArgumentException(string.Format(ValidationMessages.DutchPostcode, fieldDisplayName), paramName);
     }
+
+    public static DateTime NotDefault(DateTime value, string paramName, string fieldDisplayName)
+    {
+        return value == default
+            ? throw new ArgumentException(string.Format(ValidationMessages.CannotBeDefault, fieldDisplayName),
+                paramName)
+            : value;
+    }
 }
 
 public static class ValidationMessages
@@ -58,6 +66,7 @@ public static class ValidationMessages
     public const string NotNegative = "{0} cannot be negative";
     public const string GreaterThan = "{0} must be greater than {1}";
     public const string DutchPostcode = "{0} must be in Dutch format 1234AB (4 digits + 2 letters)";
+    public const string CannotBeDefault = "{0} cannot be default";
 }
 
 public static class FieldNames
@@ -76,4 +85,7 @@ public static class FieldNames
     public const string Recipient = "Recipient";
     public const string Address = "Address";
     public const string Department = "Department";
+    public const string ContainerId = "Container ID";
+    public const string ShippingDate = "Shipping date";
+    public const string Parcel = "Parcel";
 }

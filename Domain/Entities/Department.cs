@@ -49,10 +49,7 @@ public class Department
 
     public override bool Equals(object? obj)
     {
-        if (obj is Department other)
-            return Id.Equals(other.Id);
-
-        return false;
+        return obj is Department other && Id.Equals(other.Id);
     }
 
     public override int GetHashCode()
@@ -62,7 +59,7 @@ public class Department
 
     public static bool operator ==(Department? left, Department? right)
     {
-        return EqualityComparer<Department>.Default.Equals(left, right);
+        return ReferenceEquals(left, right) || (left is not null && right is not null && left.Id == right.Id);
     }
 
     public static bool operator !=(Department? left, Department? right)

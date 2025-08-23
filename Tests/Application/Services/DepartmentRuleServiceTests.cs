@@ -2,6 +2,7 @@ using Application.DTOs;
 using Application.Services;
 using Domain.Constants;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Interfaces;
 using Moq;
 
@@ -9,6 +10,7 @@ namespace Tests.Application.Services;
 
 public class DepartmentRuleServiceTests
 {
+    private readonly Mock<IBusinessRuleRepository> _mockBusinessRuleRepository;
     private readonly Mock<IDepartmentRepository> _mockDepartmentRepository;
     private readonly Mock<IParcelRepository> _mockParcelRepository;
     private readonly DepartmentRuleService _service;
@@ -18,7 +20,11 @@ public class DepartmentRuleServiceTests
     {
         _mockParcelRepository = new Mock<IParcelRepository>();
         _mockDepartmentRepository = new Mock<IDepartmentRepository>();
-        _service = new DepartmentRuleService(_mockParcelRepository.Object, _mockDepartmentRepository.Object);
+        _mockBusinessRuleRepository = new Mock<IBusinessRuleRepository>();
+        _service = new DepartmentRuleService(
+            _mockParcelRepository.Object,
+            _mockDepartmentRepository.Object,
+            _mockBusinessRuleRepository.Object);
 
         var testAddress = new Address(
             "Marijkestraat",
@@ -32,6 +38,10 @@ public class DepartmentRuleServiceTests
         );
 
         _testCustomer = new Customer("João Silva", testAddress);
+
+        // Set up empty business rules by default to use default behavior
+        _mockBusinessRuleRepository.Setup(r => r.GetActiveRulesByTypeAsync(It.IsAny<BusinessRuleType>()))
+            .ReturnsAsync(new List<BusinessRule>());
     }
 
     [Fact]

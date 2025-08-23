@@ -2,13 +2,13 @@ using Domain.Validation;
 
 namespace Domain.Entities;
 
-public abstract class Customer
+public class Customer
 {
     private Customer()
     {
     } // EF Core constructor
 
-    protected Customer(string name, Address address)
+    public Customer(string name, Address address)
     {
         Id = Guid.NewGuid();
 

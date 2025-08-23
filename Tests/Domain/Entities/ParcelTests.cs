@@ -52,7 +52,7 @@ public class ParcelTests
     {
         // Act & Assert
         var exception = Assert.Throws<ArgumentException>(() => new Parcel(_testCustomer, 0m, 100.0m));
-        Assert.Contains("Weight must be greater than zero", exception.Message);
+        Assert.Contains("Weight must be greater than 0", exception.Message);
     }
 
     [Fact]

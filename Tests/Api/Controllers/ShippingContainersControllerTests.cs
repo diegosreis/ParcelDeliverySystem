@@ -15,7 +15,6 @@ public class ShippingContainersControllerTests
     private readonly Mock<IParcelProcessingService> _mockParcelProcessingService;
     private readonly Mock<IShippingContainerRepository> _mockShippingContainerRepository;
     private readonly Mock<IXmlImportService> _mockXmlImportService;
-
     private readonly ShippingContainer _testContainer;
     private readonly ShippingContainerDto _testContainerDto;
     private readonly ShippingContainerWithParcelsDto _testContainerWithParcelsDto;
@@ -110,7 +109,7 @@ public class ShippingContainersControllerTests
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var returnedContainers = Assert.IsAssignableFrom<IEnumerable<ShippingContainerDto>>(okResult.Value);
+        var returnedContainers = Assert.IsAssignableFrom<IEnumerable<ShippingContainerDto>>(okResult.Value).ToList();
         Assert.Single(returnedContainers);
     }
 
@@ -126,7 +125,7 @@ public class ShippingContainersControllerTests
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var returnedContainers = Assert.IsAssignableFrom<IEnumerable<ShippingContainerDto>>(okResult.Value);
+        var returnedContainers = Assert.IsAssignableFrom<IEnumerable<ShippingContainerDto>>(okResult.Value).ToList();
         Assert.Empty(returnedContainers);
     }
 

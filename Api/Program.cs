@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json.Serialization;
 using Application.Services;
 using Domain.Interfaces;
 using Infrastructure.Repositories;
@@ -12,11 +13,23 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
-// Add services to the container
-builder.Services.AddControllers();
+// Add services to the container with enum string conversion
+builder.Services.AddControllers()
+    .AddJsonOptions(options => { options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()); });
 builder.Services.AddEndpointsApiExplorer();
 
-// Configure Swagger/OpenAPI
+// Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
+// Configure Swagger/OpenAPI with improved settings
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
@@ -37,10 +50,19 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 
-    // Include XML comments if available
+    // Include XML comments for better documentation
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath)) c.IncludeXmlComments(xmlPath);
+
+    // Add additional XML files for referenced projects
+    const string applicationXmlFile = "Application.xml";
+    var applicationXmlPath = Path.Combine(AppContext.BaseDirectory, applicationXmlFile);
+    if (File.Exists(applicationXmlPath)) c.IncludeXmlComments(applicationXmlPath);
+
+    const string domainXmlFile = "Domain.xml";
+    var domainXmlPath = Path.Combine(AppContext.BaseDirectory, domainXmlFile);
+    if (File.Exists(domainXmlPath)) c.IncludeXmlComments(domainXmlPath);
 });
 
 // Register repositories with proper lifetime management
@@ -60,32 +82,20 @@ builder.Services.AddScoped<IDataInitializationService, DataInitializationService
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy());
 
-
-// Configure CORS for development
-if (builder.Environment.IsDevelopment())
-    builder.Services.AddCors(options =>
-    {
-        options.AddPolicy("DevelopmentPolicy", policy =>
-        {
-            policy.AllowAnyOrigin()
-                .AllowAnyHeader()
-                .AllowAnyMethod();
-        });
-    });
-
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Parcel Delivery System API v1.0.0");
-        c.RoutePrefix = string.Empty; // Serve Swagger UI at the app's root
-    });
-    app.UseCors("DevelopmentPolicy");
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Parcel Delivery System API v1.0.0");
+    c.RoutePrefix = string.Empty; // Serve Swagger UI at the app's root
+    c.DocumentTitle = "Parcel Delivery System API Documentation";
+    c.DefaultModelsExpandDepth(1); // Show first level of models
+});
+
+// Use CORS before other middleware
+app.UseCors("AllowAll");
 
 app.UseHttpsRedirection();
 app.UseRouting();

@@ -212,17 +212,30 @@ public class XmlImportServiceTests
     }
 
     [Fact]
-    public async Task ImportContainerFromXmlAsync_WithExistingContainer_ShouldThrowInvalidOperationException()
+    public async Task ImportContainerFromXmlAsync_WithExistingContainer_ShouldReturnExistingContainer()
     {
         // Arrange
         var existingContainer = new ShippingContainer("Container_68465468", new DateTime(2019, 3, 7));
+
+        // Add the same parcel that exists in the XML to ensure integrity validation passes
+        var existingParcel = new Parcel(
+            new Customer("John Doe",
+                new Address("Main Street", "123", "", "Default", "Amsterdam", "NL", "1234AB", "Netherlands")),
+            5.5m, 100.0m);
+        existingContainer.AddParcel(existingParcel);
+
         _mockShippingContainerRepository.Setup(x => x.GetByContainerIdAsync("Container_68465468"))
             .ReturnsAsync(existingContainer);
 
-        // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _xmlImportService.ImportContainerFromXmlAsync(ValidXmlContent));
-        Assert.Contains("Container with ID Container_68465468 already exists", exception.Message);
+        // Act
+        var result = await _xmlImportService.ImportContainerFromXmlAsync(ValidXmlContent);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("Container_68465468", result.ContainerId);
+        Assert.Single(result.Parcels); // Should return the existing parcel
+        // Verify that AddAsync was NOT called since container already exists
+        _mockShippingContainerRepository.Verify(x => x.AddAsync(It.IsAny<ShippingContainer>()), Times.Never);
     }
 
     [Fact]

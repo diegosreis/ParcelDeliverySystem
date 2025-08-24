@@ -39,7 +39,7 @@ public class AddressTests
         // Act & Assert
         var exception = Assert.Throws<ArgumentException>(() => new Address(
             "", "28", "", "Center", "Bosschenhoofd", "NB", "4744AT", "Netherlands"));
-        Assert.Contains("Street cannot be empty", exception.Message);
+        Assert.Contains("Street is required and cannot be empty", exception.Message);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class AddressTests
         // Act & Assert
         var exception = Assert.Throws<ArgumentException>(() => new Address(
             "Marijkestraat", "", "", "Center", "Bosschenhoofd", "NB", "4744AT", "Netherlands"));
-        Assert.Contains("Number cannot be empty", exception.Message);
+        Assert.Contains("Number is required and cannot be empty", exception.Message);
     }
 
     [Fact]

@@ -9,6 +9,13 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Services;
 
+/// <summary>
+///     Service responsible for importing shipping containers from XML files
+/// </summary>
+/// <param name="shippingContainerRepository"></param>
+/// <param name="parcelRepository"></param>
+/// <param name="departmentRepository"></param>
+/// <param name="logger"></param>
 public class XmlImportService(
     IShippingContainerRepository shippingContainerRepository,
     IParcelRepository parcelRepository,
@@ -28,6 +35,11 @@ public class XmlImportService(
     private readonly IShippingContainerRepository _shippingContainerRepository =
         shippingContainerRepository ?? throw new ArgumentNullException(nameof(shippingContainerRepository));
 
+    /// <summary>
+    ///     Validates the XML content and returns true if it is valid, false otherwise
+    /// </summary>
+    /// <param name="xmlContent"></param>
+    /// <returns></returns>
     public Task<bool> ValidateXmlContentAsync(string xmlContent)
     {
         if (string.IsNullOrWhiteSpace(xmlContent))
@@ -55,6 +67,13 @@ public class XmlImportService(
         }
     }
 
+    /// <summary>
+    ///     Imports a shipping container from XML content
+    /// </summary>
+    /// <param name="xmlContent"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="InvalidOperationException"></exception>
     public async Task<ShippingContainerWithParcelsDto> ImportContainerFromXmlAsync(string xmlContent)
     {
         if (string.IsNullOrWhiteSpace(xmlContent))
@@ -76,7 +95,7 @@ public class XmlImportService(
 
             _logger.LogInformation(
                 "Container import completed successfully. ContainerId: {ContainerId}, ImportedParcels: {ParcelCount}",
-                container.Id, container.Parcels.Count);
+                container.ContainerId, container.Parcels.Count);
 
             return result;
         }
@@ -87,6 +106,13 @@ public class XmlImportService(
         }
     }
 
+    /// <summary>
+    ///     Imports a shipping container from a file
+    /// </summary>
+    /// <param name="filePath"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="FileNotFoundException"></exception>
     public async Task<ShippingContainerWithParcelsDto> ImportContainerFromFileAsync(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath))
@@ -115,26 +141,169 @@ public class XmlImportService(
 
     private async Task<ShippingContainer> CreateContainerFromXmlAsync(ContainerXml containerXml)
     {
-        // Check if container already exists
+        // Check if container already exists with comprehensive validation
         var existingContainer = await _shippingContainerRepository.GetByContainerIdAsync(containerXml.Id);
         if (existingContainer != null)
-            throw new InvalidOperationException($"Container with ID {containerXml.Id} already exists");
+        {
+            _logger.LogInformation(
+                "Container with ID {ContainerId} already exists. Validating integrity...",
+                containerXml.Id);
 
-        // Create container
+            // Validate if existing container matches the import data
+            var integrityResult = await ValidateContainerIntegrityAsync(existingContainer, containerXml);
+
+            if (integrityResult.IsValid)
+            {
+                _logger.LogInformation(
+                    "Container {ContainerId} integrity validated successfully. Returning existing container with {ParcelCount} parcels.",
+                    containerXml.Id, existingContainer.Parcels.Count);
+                return existingContainer;
+            }
+
+            _logger.LogWarning(
+                "Container {ContainerId} exists but has integrity issues: {Issues}. Creating new version.",
+                containerXml.Id, string.Join(", ", integrityResult.Issues));
+
+            // For safety, we could either:
+            // 1. Throw an exception (strict mode)
+            // 2. Update the existing container (merge mode) 
+            // 3. Create with different ID (versioning mode)
+
+            // Using strict mode for data integrity
+            throw new InvalidOperationException(
+                $"Container {containerXml.Id} already exists but with different data. " +
+                $"Issues found: {string.Join(", ", integrityResult.Issues)}");
+        }
+
+        _logger.LogInformation("Creating new container with ID {ContainerId}", containerXml.Id);
+
+        // Create container with transaction-like behavior
         var container = new ShippingContainer(containerXml.Id, containerXml.ShippingDate);
         container = await _shippingContainerRepository.AddAsync(container);
 
-        // Process parcels
-        foreach (var parcelXml in containerXml.Parcels)
+        try
         {
+            // Process parcels with duplicate detection
+            var processedParcels = await ProcessParcelsWithDuplicateDetectionAsync(containerXml.Parcels);
+
+            foreach (var parcel in processedParcels) container.AddParcel(parcel);
+
+            // Update container with parcels
+            await _shippingContainerRepository.UpdateAsync(container);
+
+            _logger.LogInformation(
+                "Successfully created container {ContainerId} with {ParcelCount} unique parcels",
+                container.ContainerId, container.Parcels.Count);
+
+            return container;
+        }
+        catch (Exception ex)
+        {
+            // Rollback: remove the container if parcel processing fails
+            _logger.LogError(ex, "Failed to process parcels for container {ContainerId}. Rolling back.",
+                container.ContainerId);
+
+            try
+            {
+                await _shippingContainerRepository.DeleteAsync(container.Id);
+            }
+            catch (Exception rollbackEx)
+            {
+                _logger.LogError(rollbackEx, "Failed to rollback container {ContainerId}", container.ContainerId);
+            }
+
+            throw;
+        }
+    }
+
+    private async Task<ContainerIntegrityResult> ValidateContainerIntegrityAsync(
+        ShippingContainer existingContainer,
+        ContainerXml containerXml)
+    {
+        var issues = new List<string>();
+
+        // Validate shipping date
+        if (existingContainer.ShippingDate != containerXml.ShippingDate)
+            issues.Add(
+                $"Shipping date mismatch: existing={existingContainer.ShippingDate:yyyy-MM-dd}, new={containerXml.ShippingDate:yyyy-MM-dd}");
+
+        // Validate parcel count
+        if (existingContainer.Parcels.Count != containerXml.Parcels.Count)
+            issues.Add(
+                $"Parcel count mismatch: existing={existingContainer.Parcels.Count}, new={containerXml.Parcels.Count}");
+        else
+            // Deep validation of parcels if counts match
+            await ValidateParcelIntegrityAsync(existingContainer.Parcels, containerXml.Parcels, issues);
+
+        return new ContainerIntegrityResult(issues.Count == 0, issues);
+    }
+
+    private async Task ValidateParcelIntegrityAsync(
+        IEnumerable<Parcel> existingParcels,
+        IEnumerable<ParcelXml> xmlParcels,
+        List<string> issues)
+    {
+        await Task.CompletedTask;
+
+        var existingParcelsList = existingParcels.ToList();
+        var xmlParcelsList = xmlParcels.ToList();
+
+        for (var i = 0; i < existingParcelsList.Count; i++)
+        {
+            var existing = existingParcelsList[i];
+            var xml = xmlParcelsList[i];
+
+            if (Math.Abs(existing.Weight - xml.Weight) > 0.01m)
+                issues.Add($"Parcel {i + 1} weight mismatch: existing={existing.Weight}, new={xml.Weight}");
+
+            if (Math.Abs(existing.Value - xml.Value) > 0.01m)
+                issues.Add($"Parcel {i + 1} value mismatch: existing={existing.Value}, new={xml.Value}");
+
+            if (existing.Recipient.Name != xml.Recipient.Name)
+                issues.Add(
+                    $"Parcel {i + 1} recipient name mismatch: existing={existing.Recipient.Name}, new={xml.Recipient.Name}");
+        }
+    }
+
+    private async Task<List<Parcel>> ProcessParcelsWithDuplicateDetectionAsync(IEnumerable<ParcelXml> parcelXmls)
+    {
+        var processedParcels = new List<Parcel>();
+        var parcelSignatures = new HashSet<string>();
+        var duplicateCount = 0;
+
+        foreach (var parcelXml in parcelXmls)
+        {
+            // Create a signature for duplicate detection
+            var signature = CreateParcelSignature(parcelXml);
+
+            if (parcelSignatures.Contains(signature))
+            {
+                duplicateCount++;
+                _logger.LogWarning(
+                    "Duplicate parcel detected and skipped: {RecipientName}, Weight: {Weight}, Value: {Value}",
+                    parcelXml.Recipient.Name, parcelXml.Weight, parcelXml.Value);
+                continue;
+            }
+
+            parcelSignatures.Add(signature);
             var parcel = await CreateParcelFromXmlAsync(parcelXml);
-            container.AddParcel(parcel);
+            processedParcels.Add(parcel);
         }
 
-        // Update container with parcels
-        await _shippingContainerRepository.UpdateAsync(container);
+        if (duplicateCount > 0)
+            _logger.LogInformation(
+                "Processed {ProcessedCount} unique parcels, skipped {DuplicateCount} duplicates",
+                processedParcels.Count, duplicateCount);
 
-        return container;
+        return processedParcels;
+    }
+
+    private static string CreateParcelSignature(ParcelXml parcelXml)
+    {
+        // Create a deterministic signature for duplicate detection
+        return $"{parcelXml.Recipient.Name}|{parcelXml.Weight}|{parcelXml.Value}|" +
+               $"{parcelXml.Recipient.Address.Street}|{parcelXml.Recipient.Address.HouseNumber}|" +
+               $"{parcelXml.Recipient.Address.PostalCode}|{parcelXml.Recipient.Address.City}";
     }
 
     private async Task<Parcel> CreateParcelFromXmlAsync(ParcelXml parcelXml)
@@ -197,8 +366,9 @@ public class XmlImportService(
             if (insuranceDept != null) departments.Add(insuranceDept);
         }
 
-        // Assign departments to parcel (using correct method name)
-        foreach (var department in departments) parcel.AssignDepartment(department);
+        // Assign departments to parcel
+        foreach (var department in departments)
+            parcel.AssignDepartment(department);
 
         _logger.LogInformation(
             "Assigned parcel {ParcelId} to departments: {Departments}",

@@ -1,0 +1,34 @@
+services:
+  parcel-delivery-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: final
+    container_name: parcel-delivery-system
+    ports:
+      - "5227:5227"
+      - "7093:7093"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5227
+      - ASPNETCORE_LOGGING__CONSOLE__DISABLECOLORS=true
+      - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+    volumes:
+      - parcel_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5227/health"]
+      interval: 300s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - parcel-network
+
+volumes:
+  parcel_data:
+    driver: local
+
+networks:
+  parcel-network:
+    driver: bridge

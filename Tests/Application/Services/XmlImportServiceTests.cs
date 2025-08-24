@@ -43,6 +43,7 @@ public class XmlImportServiceTests
                                              """;
 
     private readonly Mock<IDepartmentRepository> _mockDepartmentRepository;
+    private readonly Mock<IDepartmentRuleService> _mockDepartmentRuleService;
     private readonly Mock<ILogger<XmlImportService>> _mockLogger;
     private readonly Mock<IParcelRepository> _mockParcelRepository;
     private readonly Mock<IShippingContainerRepository> _mockShippingContainerRepository;
@@ -53,13 +54,18 @@ public class XmlImportServiceTests
         _mockShippingContainerRepository = new Mock<IShippingContainerRepository>();
         _mockParcelRepository = new Mock<IParcelRepository>();
         _mockDepartmentRepository = new Mock<IDepartmentRepository>();
+        _mockDepartmentRuleService = new Mock<IDepartmentRuleService>();
         _mockLogger = new Mock<ILogger<XmlImportService>>();
 
         _xmlImportService = new XmlImportService(
             _mockShippingContainerRepository.Object,
             _mockParcelRepository.Object,
             _mockDepartmentRepository.Object,
+            _mockDepartmentRuleService.Object,
             _mockLogger.Object);
+
+        _mockDepartmentRuleService.Setup(x => x.DetermineDepartmentsAsync(It.IsAny<Parcel>()))
+            .ReturnsAsync([]);
     }
 
     [Fact]
@@ -68,7 +74,7 @@ public class XmlImportServiceTests
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
             new XmlImportService(null!, _mockParcelRepository.Object, _mockDepartmentRepository.Object,
-                _mockLogger.Object));
+                _mockDepartmentRuleService.Object, _mockLogger.Object));
     }
 
     [Fact]
@@ -77,7 +83,7 @@ public class XmlImportServiceTests
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
             new XmlImportService(_mockShippingContainerRepository.Object, null!, _mockDepartmentRepository.Object,
-                _mockLogger.Object));
+                _mockDepartmentRuleService.Object, _mockLogger.Object));
     }
 
     [Fact]
@@ -86,7 +92,7 @@ public class XmlImportServiceTests
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
             new XmlImportService(_mockShippingContainerRepository.Object, _mockParcelRepository.Object, null!,
-                _mockLogger.Object));
+                _mockDepartmentRuleService.Object, _mockLogger.Object));
     }
 
     [Fact]
@@ -95,7 +101,7 @@ public class XmlImportServiceTests
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
             new XmlImportService(_mockShippingContainerRepository.Object, _mockParcelRepository.Object,
-                _mockDepartmentRepository.Object, null!));
+                _mockDepartmentRepository.Object, _mockDepartmentRuleService.Object, null!));
     }
 
     [Fact]
@@ -152,9 +158,9 @@ public class XmlImportServiceTests
     public async Task ImportContainerFromXmlAsync_WithValidXml_ShouldReturnContainerDto()
     {
         // Arrange
-        var testContainer = new ShippingContainer("Container_68465468", new DateTime(2019, 3, 7));
+        var testContainer = new ShippingContainer("68465468", new DateTime(2019, 3, 7));
 
-        _mockShippingContainerRepository.Setup(x => x.GetByContainerIdAsync("Container_68465468"))
+        _mockShippingContainerRepository.Setup(x => x.GetByContainerIdAsync("68465468"))
             .ReturnsAsync((ShippingContainer)null!);
         _mockShippingContainerRepository.Setup(x => x.AddAsync(It.IsAny<ShippingContainer>()))
             .ReturnsAsync(testContainer);
@@ -168,7 +174,7 @@ public class XmlImportServiceTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal("Container_68465468", result.ContainerId);
+        Assert.Equal("68465468", result.ContainerId);
         Assert.Equal(new DateTime(2019, 3, 7), result.ShippingDate);
         Assert.Equal(ShippingContainerStatus.Pending, result.Status);
     }
@@ -233,7 +239,7 @@ public class XmlImportServiceTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal("Container_68465468", result.ContainerId);
-        Assert.Equal(1, result.TotalParcels); // Should return the existing parcel count
+        Assert.Equal(1, result.TotalParcels);
         // Verify that AddAsync was NOT called since container already exists
         _mockShippingContainerRepository.Verify(x => x.AddAsync(It.IsAny<ShippingContainer>()), Times.Never);
     }
@@ -295,7 +301,7 @@ public class XmlImportServiceTests
     public async Task ImportContainerFromXmlFileAsync_WithNonExistentFile_ShouldThrowFileNotFoundException()
     {
         // Arrange
-        var nonExistentPath = "non-existent-file.xml";
+        const string nonExistentPath = "non-existent-file.xml";
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<FileNotFoundException>(() =>

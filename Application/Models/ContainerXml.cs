@@ -18,7 +18,7 @@ public class ContainerXml
     /// Shipping date of the container from XML
     /// </summary>
     [XmlElement("ShippingDate")]
-    public DateTime ShippingDate { get; set; }
+    public DateTimeOffset ShippingDate { get; set; }
 
     /// <summary>
     /// Collection of parcels contained in this container

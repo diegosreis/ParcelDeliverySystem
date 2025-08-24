@@ -3,6 +3,7 @@ using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
 using Microsoft.Extensions.Logging;
+using static Domain.Constants.DefaultBusinessRuleValues;
 
 namespace Application.Services;
 
@@ -104,7 +105,7 @@ public class ShippingContainerService : IShippingContainerService
             container.Parcels.Count,
             container.Parcels.Sum(p => p.Weight),
             container.Parcels.Sum(p => p.Value),
-            container.Parcels.Count(p => p.Value > 1000),
+            container.Parcels.Count(p => p.Value > InsuranceValueThreshold),
             container.CreatedAt,
             container.UpdatedAt
         );

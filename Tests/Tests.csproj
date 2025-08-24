@@ -27,4 +27,10 @@
         <ProjectReference Include="..\Api\Api.csproj"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <None Include="Container_2-MSX.xml">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
 </Project>

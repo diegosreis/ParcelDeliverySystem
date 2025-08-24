@@ -3,6 +3,7 @@ using Domain.Constants;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
+using static Domain.Constants.DefaultBusinessRuleValues;
 
 namespace Application.Services;
 
@@ -50,6 +51,34 @@ public class DepartmentRuleService(
     }
 
     /// <inheritdoc />
+    public async Task<List<Department>> DetermineDepartmentsAsync(Parcel parcel)
+    {
+        ArgumentNullException.ThrowIfNull(parcel);
+
+        var departments = new List<Department>();
+
+        // Apply weight-based rules
+        var weightDepartmentDtos = await GetDepartmentsByWeightAsync(parcel.Weight);
+        foreach (var deptDto in weightDepartmentDtos)
+        {
+            var department = await _departmentRepository.GetByIdAsync(deptDto.Id);
+            if (department != null)
+                departments.Add(department);
+        }
+
+        // Apply value-based rules
+        var valueDepartmentDtos = await GetDepartmentsByValueAsync(parcel.Value);
+        foreach (var deptDto in valueDepartmentDtos)
+        {
+            var department = await _departmentRepository.GetByIdAsync(deptDto.Id);
+            if (department != null && departments.All(d => d.Id != department.Id))
+                departments.Add(department);
+        }
+
+        return departments;
+    }
+
+    /// <inheritdoc />
     public async Task<IEnumerable<DepartmentDto>> GetDepartmentsByWeightAsync(decimal weight)
     {
         var weightRules = await _businessRuleRepository.GetActiveRulesByTypeAsync(BusinessRuleType.Weight);
@@ -87,7 +116,7 @@ public class DepartmentRuleService(
     /// <inheritdoc />
     public async Task<IEnumerable<DepartmentDto>> GetDefaultDepartmentsByValueAsync(decimal value)
     {
-        if (value <= 1000m)
+        if (value <= InsuranceValueThreshold)
             return [];
 
         return await GetSingleDepartmentAsync(DefaultDepartmentNames.Insurance);
@@ -98,8 +127,8 @@ public class DepartmentRuleService(
     {
         return weight switch
         {
-            <= 1m => await GetSingleDepartmentAsync(DefaultDepartmentNames.Mail),
-            <= 10m => await GetSingleDepartmentAsync(DefaultDepartmentNames.Regular),
+            <= MailWeightThreshold => await GetSingleDepartmentAsync(DefaultDepartmentNames.Mail),
+            <= RegularWeightThreshold => await GetSingleDepartmentAsync(DefaultDepartmentNames.Regular),
             _ => await GetSingleDepartmentAsync(DefaultDepartmentNames.Heavy)
         };
     }

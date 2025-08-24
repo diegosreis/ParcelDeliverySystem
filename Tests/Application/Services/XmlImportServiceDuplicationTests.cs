@@ -33,6 +33,7 @@ public class XmlImportServiceDuplicationTests
                                     """;
 
     private readonly Mock<IDepartmentRepository> _mockDepartmentRepository;
+    private readonly Mock<IDepartmentRuleService> _mockDepartmentRuleService;
     private readonly Mock<ILogger<XmlImportService>> _mockLogger;
     private readonly Mock<IParcelRepository> _mockParcelRepository;
     private readonly Mock<IShippingContainerRepository> _mockShippingContainerRepository;
@@ -43,12 +44,14 @@ public class XmlImportServiceDuplicationTests
         _mockShippingContainerRepository = new Mock<IShippingContainerRepository>();
         _mockParcelRepository = new Mock<IParcelRepository>();
         _mockDepartmentRepository = new Mock<IDepartmentRepository>();
+        _mockDepartmentRuleService = new Mock<IDepartmentRuleService>();
         _mockLogger = new Mock<ILogger<XmlImportService>>();
 
         _service = new XmlImportService(
             _mockShippingContainerRepository.Object,
             _mockParcelRepository.Object,
             _mockDepartmentRepository.Object,
+            _mockDepartmentRuleService.Object,
             _mockLogger.Object);
 
         SetupDefaultMocks();
@@ -82,6 +85,10 @@ public class XmlImportServiceDuplicationTests
         _mockDepartmentRepository.Setup(r => r.GetByNameAsync("Regular")).ReturnsAsync(regularDept);
         _mockDepartmentRepository.Setup(r => r.GetByNameAsync("Heavy")).ReturnsAsync(heavyDept);
         _mockDepartmentRepository.Setup(r => r.GetByNameAsync("Insurance")).ReturnsAsync(insuranceDept);
+
+        // Setup department rule service to return empty list for tests
+        _mockDepartmentRuleService.Setup(x => x.DetermineDepartmentsAsync(It.IsAny<Parcel>()))
+            .ReturnsAsync([]);
     }
 
     [Fact]
@@ -194,7 +201,7 @@ public class XmlImportServiceDuplicationTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal("68465468", result.ContainerId);
-        Assert.Equal(2, result.TotalParcels); // Should have 2 unique parcels, not 3
+        Assert.Equal(2, result.TotalParcels);
 
         // Verify that only 2 parcels were added to repository
         _mockParcelRepository.Verify(r => r.AddAsync(It.IsAny<Parcel>()), Times.Exactly(2));

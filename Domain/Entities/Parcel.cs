@@ -1,10 +1,11 @@
 using Domain.Enums;
 using Domain.Validation;
+using static Domain.Constants.DefaultBusinessRuleValues;
 
 namespace Domain.Entities;
 
 /// <summary>
-/// Represents a parcel in the delivery system with recipient information and department assignments
+///     Represents a parcel in the delivery system with recipient information and department assignments
 /// </summary>
 public class Parcel
 {
@@ -15,7 +16,7 @@ public class Parcel
     } // EF Core constructor
 
     /// <summary>
-    /// Creates a new parcel with the specified recipient, weight, and value
+    ///     Creates a new parcel with the specified recipient, weight, and value
     /// </summary>
     /// <param name="recipient">Customer who will receive the parcel</param>
     /// <param name="weight">Weight of the parcel in kilograms</param>
@@ -33,67 +34,67 @@ public class Parcel
     }
 
     /// <summary>
-    /// Unique identifier for the parcel
+    ///     Unique identifier for the parcel
     /// </summary>
     public Guid Id { get; private set; }
-    
+
     /// <summary>
-    /// Customer who will receive the parcel
+    ///     Customer who will receive the parcel
     /// </summary>
     public Customer Recipient { get; private set; } = null!;
-    
+
     /// <summary>
-    /// Weight of the parcel in kilograms
+    ///     Weight of the parcel in kilograms
     /// </summary>
     public decimal Weight { get; private set; }
-    
+
     /// <summary>
-    /// Monetary value of the parcel contents
+    ///     Monetary value of the parcel contents
     /// </summary>
     public decimal Value { get; private set; }
-    
+
     /// <summary>
-    /// Current processing status of the parcel
+    ///     Current processing status of the parcel
     /// </summary>
     public ParcelStatus Status { get; private set; }
-    
+
     /// <summary>
-    /// Collection of departments assigned to handle this parcel
+    ///     Collection of departments assigned to handle this parcel
     /// </summary>
     public IReadOnlyList<Department> AssignedDepartments => _assignedDepartments.AsReadOnly();
-    
+
     /// <summary>
-    /// Timestamp when the parcel was created
+    ///     Timestamp when the parcel was created
     /// </summary>
     public DateTime CreatedAt { get; private set; }
-    
+
     /// <summary>
-    /// Timestamp when the parcel was last updated
+    ///     Timestamp when the parcel was last updated
     /// </summary>
     public DateTime? UpdatedAt { get; private set; }
 
     /// <summary>
-    /// Indicates whether the parcel requires insurance approval (value > €1000)
+    ///     Indicates whether the parcel requires insurance approval (value > €1000)
     /// </summary>
-    public bool RequiresInsuranceApproval => Value > 1000;
+    public bool RequiresInsuranceApproval => Value > InsuranceValueThreshold;
 
     /// <summary>
-    /// Indicates whether the parcel is considered heavy (weight > 10kg)
+    ///     Indicates whether the parcel is considered heavy (weight > 10kg)
     /// </summary>
-    public bool IsHeavyParcel => Weight > 10;
+    public bool IsHeavyParcel => Weight > RegularWeightThreshold;
 
     /// <summary>
-    /// Indicates whether the parcel is in the regular weight category (1kg < weight ≤ 10kg)
+    ///     Indicates whether the parcel is in the regular weight category (1kg to 10kg)
     /// </summary>
-    public bool IsRegularParcel => Weight > 1 && Weight <= 10;
+    public bool IsRegularParcel => Weight > MailWeightThreshold && Weight <= RegularWeightThreshold;
 
     /// <summary>
-    /// Indicates whether the parcel is in the mail category (weight ≤ 1kg)
+    ///     Indicates whether the parcel is in the mail category (weight up to 1kg)
     /// </summary>
-    public bool IsMailParcel => Weight <= 1;
+    public bool IsMailParcel => Weight <= MailWeightThreshold;
 
     /// <summary>
-    /// Updates the parcel's weight and value
+    ///     Updates the parcel's weight and value
     /// </summary>
     /// <param name="weight">New weight in kilograms</param>
     /// <param name="value">New monetary value</param>
@@ -106,7 +107,7 @@ public class Parcel
     }
 
     /// <summary>
-    /// Assigns a department to handle this parcel
+    ///     Assigns a department to handle this parcel
     /// </summary>
     /// <param name="department">Department to assign to the parcel</param>
     /// <exception cref="ArgumentNullException">Thrown when department is null</exception>
@@ -114,15 +115,13 @@ public class Parcel
     {
         Guard.NotNull(department, nameof(department), FieldNames.Department);
 
-        if (!_assignedDepartments.Any(d => d.Id == department.Id))
-        {
-            _assignedDepartments.Add(department);
-            UpdatedAt = DateTime.UtcNow;
-        }
+        if (_assignedDepartments.Any(d => d.Id == department.Id)) return;
+        _assignedDepartments.Add(department);
+        UpdatedAt = DateTime.UtcNow;
     }
 
     /// <summary>
-    /// Removes a department assignment from this parcel
+    ///     Removes a department assignment from this parcel
     /// </summary>
     /// <param name="department">Department to remove from the parcel</param>
     /// <exception cref="ArgumentNullException">Thrown when department is null</exception>
@@ -130,15 +129,13 @@ public class Parcel
     {
         Guard.NotNull(department, nameof(department), FieldNames.Department);
         var existingDepartment = _assignedDepartments.FirstOrDefault(d => d.Id == department.Id);
-        if (existingDepartment != null)
-        {
-            _assignedDepartments.Remove(existingDepartment);
-            UpdatedAt = DateTime.UtcNow;
-        }
+        if (existingDepartment == null) return;
+        _assignedDepartments.Remove(existingDepartment);
+        UpdatedAt = DateTime.UtcNow;
     }
 
     /// <summary>
-    /// Updates the processing status of the parcel
+    ///     Updates the processing status of the parcel
     /// </summary>
     /// <param name="status">New status for the parcel</param>
     public void UpdateStatus(ParcelStatus status)

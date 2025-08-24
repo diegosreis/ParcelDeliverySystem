@@ -11,6 +11,7 @@ namespace Tests.Application.Services;
 public class RealXmlProcessingTests
 {
     private readonly Mock<IDepartmentRepository> _mockDepartmentRepository;
+    private readonly Mock<IDepartmentRuleService> _mockDepartmentRuleService;
     private readonly Mock<ILogger<XmlImportService>> _mockLogger;
     private readonly Mock<IParcelRepository> _mockParcelRepository;
     private readonly Mock<IShippingContainerRepository> _mockShippingContainerRepository;
@@ -21,24 +22,30 @@ public class RealXmlProcessingTests
         _mockShippingContainerRepository = new Mock<IShippingContainerRepository>();
         _mockParcelRepository = new Mock<IParcelRepository>();
         _mockDepartmentRepository = new Mock<IDepartmentRepository>();
+        _mockDepartmentRuleService = new Mock<IDepartmentRuleService>();
         _mockLogger = new Mock<ILogger<XmlImportService>>();
 
         _xmlImportService = new XmlImportService(
             _mockShippingContainerRepository.Object,
             _mockParcelRepository.Object,
             _mockDepartmentRepository.Object,
+            _mockDepartmentRuleService.Object,
             _mockLogger.Object);
+
+        // Setup department rule service to return empty list for tests
+        _mockDepartmentRuleService.Setup(x => x.DetermineDepartmentsAsync(It.IsAny<Parcel>()))
+            .ReturnsAsync([]);
     }
 
     [Fact]
     public async Task ProcessRealXmlFile_ShouldParseCorrectly()
     {
         // Arrange
-        const string xmlFilePath = "/home/diego/RiderProjects/ParcelDeliverySystem/Container_2-MSX.xml";
+        const string xmlFilePath = "Container_2-MSX.xml";
 
         if (!File.Exists(xmlFilePath))
         {
-            Assert.Fail("Test XML file not found");
+            Assert.Fail($"Test XML file not found at: {xmlFilePath}");
             return;
         }
 
@@ -66,7 +73,7 @@ public class RealXmlProcessingTests
         Assert.NotNull(containerXml);
         Assert.Equal("68465468", containerXml.Id);
         Assert.Equal(new DateTime(2016, 7, 22), containerXml.ShippingDate.Date);
-        Assert.True(containerXml.Parcels.Count >= 4); // Should have at least 4 parcels from our sample
+        Assert.True(containerXml.Parcels.Count >= 4);
 
         // Verify first parcel
         var firstParcel = containerXml.Parcels.First();

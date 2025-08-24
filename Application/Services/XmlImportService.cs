@@ -2,7 +2,6 @@ using System.Xml;
 using System.Xml.Serialization;
 using Application.DTOs;
 using Application.Models;
-using Domain.Constants;
 using Domain.Entities;
 using Domain.Interfaces;
 using Microsoft.Extensions.Logging;
@@ -15,16 +14,21 @@ namespace Application.Services;
 /// <param name="shippingContainerRepository"></param>
 /// <param name="parcelRepository"></param>
 /// <param name="departmentRepository"></param>
+/// <param name="departmentRuleService"></param>
 /// <param name="logger"></param>
 public class XmlImportService(
     IShippingContainerRepository shippingContainerRepository,
     IParcelRepository parcelRepository,
     IDepartmentRepository departmentRepository,
+    IDepartmentRuleService departmentRuleService,
     ILogger<XmlImportService> logger)
     : IXmlImportService
 {
     private readonly IDepartmentRepository _departmentRepository =
         departmentRepository ?? throw new ArgumentNullException(nameof(departmentRepository));
+
+    private readonly IDepartmentRuleService _departmentRuleService =
+        departmentRuleService ?? throw new ArgumentNullException(nameof(departmentRuleService));
 
     private readonly ILogger<XmlImportService> _logger =
         logger ?? throw new ArgumentNullException(nameof(logger));
@@ -100,7 +104,6 @@ public class XmlImportService(
     /// </summary>
     /// <param name="xmlContent"></param>
     /// <returns></returns>
-    /// <inheritdoc />
     public Task<bool> ValidateXmlContentAsync(string xmlContent)
     {
         if (string.IsNullOrWhiteSpace(xmlContent))
@@ -152,8 +155,12 @@ public class XmlImportService(
                 "Container with ID {ContainerId} already exists. Validating integrity...",
                 containerXml.Id);
 
+            // Process parcels from XML to get the actual count after duplicate removal
+            var processedParcelsFromXml = await ProcessParcelsWithDuplicateDetectionAsync(containerXml.Parcels, true);
+
             // Validate if existing container matches the import data
-            var integrityResult = await ValidateContainerIntegrityAsync(existingContainer, containerXml);
+            var integrityResult =
+                await ValidateContainerIntegrityAsync(existingContainer, containerXml, processedParcelsFromXml.Count);
 
             if (integrityResult.IsValid)
             {
@@ -164,13 +171,8 @@ public class XmlImportService(
             }
 
             _logger.LogWarning(
-                "Container {ContainerId} exists but has integrity issues: {Issues}. Creating new version.",
+                "Container {ContainerId} exists but has integrity issues: {Issues}.",
                 containerXml.Id, string.Join(", ", integrityResult.Issues));
-
-            // For safety, we could either:
-            // 1. Throw an exception (strict mode)
-            // 2. Update the existing container (merge mode) 
-            // 3. Create with different ID (versioning mode)
 
             // Using strict mode for data integrity
             throw new InvalidOperationException(
@@ -181,7 +183,8 @@ public class XmlImportService(
         _logger.LogInformation("Creating new container with ID {ContainerId}", containerXml.Id);
 
         // Create container with transaction-like behavior
-        var container = new ShippingContainer(containerXml.Id, containerXml.ShippingDate);
+        var localShippingDate = containerXml.ShippingDate.DateTime;
+        var container = new ShippingContainer(containerXml.Id, localShippingDate);
         container = await _shippingContainerRepository.AddAsync(container);
 
         try
@@ -221,27 +224,28 @@ public class XmlImportService(
 
     private async Task<ContainerIntegrityResult> ValidateContainerIntegrityAsync(
         ShippingContainer existingContainer,
-        ContainerXml containerXml)
+        ContainerXml containerXml,
+        int processedParcelCount)
     {
         var issues = new List<string>();
 
-        // Validate shipping date
-        if (existingContainer.ShippingDate != containerXml.ShippingDate)
+        // Validate shipping date 
+        if (existingContainer.ShippingDate.Date != containerXml.ShippingDate.Date)
             issues.Add(
                 $"Shipping date mismatch: existing={existingContainer.ShippingDate:yyyy-MM-dd}, new={containerXml.ShippingDate:yyyy-MM-dd}");
 
-        // Validate parcel count
-        if (existingContainer.Parcels.Count != containerXml.Parcels.Count)
+        // Validate parcel count using the processed count
+        if (existingContainer.Parcels.Count != processedParcelCount)
             issues.Add(
-                $"Parcel count mismatch: existing={existingContainer.Parcels.Count}, new={containerXml.Parcels.Count}");
+                $"Parcel count mismatch: existing={existingContainer.Parcels.Count}, new={processedParcelCount}");
         else
-            // Deep validation of parcels if counts match
+            // If parcel counts match, perform deep validation of parcel details
             await ValidateParcelIntegrityAsync(existingContainer.Parcels, containerXml.Parcels, issues);
 
         return new ContainerIntegrityResult(issues.Count == 0, issues);
     }
 
-    private async Task ValidateParcelIntegrityAsync(
+    private static async Task ValidateParcelIntegrityAsync(
         IEnumerable<Parcel> existingParcels,
         IEnumerable<ParcelXml> xmlParcels,
         List<string> issues)
@@ -268,11 +272,13 @@ public class XmlImportService(
         }
     }
 
-    private async Task<List<Parcel>> ProcessParcelsWithDuplicateDetectionAsync(IEnumerable<ParcelXml> parcelXmls)
+    private async Task<List<Parcel>> ProcessParcelsWithDuplicateDetectionAsync(IEnumerable<ParcelXml> parcelXmls,
+        bool validateOnly = false)
     {
         var processedParcels = new List<Parcel>();
         var parcelSignatures = new HashSet<string>();
         var duplicateCount = 0;
+        var uniqueParcelCount = 0;
 
         foreach (var parcelXml in parcelXmls)
         {
@@ -288,6 +294,12 @@ public class XmlImportService(
                 continue;
             }
 
+            uniqueParcelCount++;
+
+            if (validateOnly)
+                // Only validate duplicates, do not create parcel entities
+                continue;
+
             var parcel = await CreateParcelFromXmlAsync(parcelXml);
             processedParcels.Add(parcel);
         }
@@ -295,9 +307,11 @@ public class XmlImportService(
         if (duplicateCount > 0)
             _logger.LogInformation(
                 "Processed {ProcessedCount} unique parcels, skipped {DuplicateCount} duplicates",
-                processedParcels.Count, duplicateCount);
+                validateOnly ? uniqueParcelCount : processedParcels.Count, duplicateCount);
 
-        return processedParcels;
+        return validateOnly
+            ? Enumerable.Repeat<Parcel>(null!, uniqueParcelCount).ToList()
+            : processedParcels;
     }
 
     private static string CreateParcelSignature(ParcelXml parcelXml)
@@ -336,37 +350,8 @@ public class XmlImportService(
 
     private async Task AssignDepartmentsToParcelAsync(Parcel parcel)
     {
-        var departments = new List<Department>();
-
-        switch (parcel.Weight)
-        {
-            // Weight-based department assignment
-            case <= 1:
-            {
-                var mailDept = await _departmentRepository.GetByNameAsync(DefaultDepartmentNames.Mail);
-                if (mailDept != null) departments.Add(mailDept);
-                break;
-            }
-            case <= 10:
-            {
-                var regularDept = await _departmentRepository.GetByNameAsync(DefaultDepartmentNames.Regular);
-                if (regularDept != null) departments.Add(regularDept);
-                break;
-            }
-            default:
-            {
-                var heavyDept = await _departmentRepository.GetByNameAsync(DefaultDepartmentNames.Heavy);
-                if (heavyDept != null) departments.Add(heavyDept);
-                break;
-            }
-        }
-
-        // Value-based department assignment (Insurance)
-        if (parcel.Value > 1000)
-        {
-            var insuranceDept = await _departmentRepository.GetByNameAsync(DefaultDepartmentNames.Insurance);
-            if (insuranceDept != null) departments.Add(insuranceDept);
-        }
+        // Use department rule service to determine department assignments
+        var departments = await _departmentRuleService.DetermineDepartmentsAsync(parcel);
 
         // Assign departments to parcel
         foreach (var department in departments)

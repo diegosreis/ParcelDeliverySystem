@@ -34,7 +34,7 @@ public class RealXmlProcessingTests
     public async Task ProcessRealXmlFile_ShouldParseCorrectly()
     {
         // Arrange
-        var xmlFilePath = "/home/diego/RiderProjects/ParcelDeliverySystem/Container_68465468.xml";
+        const string xmlFilePath = "/home/diego/RiderProjects/ParcelDeliverySystem/Container_2-MSX.xml";
 
         if (!File.Exists(xmlFilePath))
         {

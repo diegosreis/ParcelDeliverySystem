@@ -6,6 +6,10 @@ using Domain.Interfaces;
 
 namespace Application.Services;
 
+/// <summary>
+///     Service implementation for determining department assignments based on parcel characteristics.
+///     Encapsulates business logic for both configurable rules and default department routing.
+/// </summary>
 public class DepartmentRuleService(
     IParcelRepository parcelRepository,
     IDepartmentRepository departmentRepository,
@@ -21,12 +25,14 @@ public class DepartmentRuleService(
     private readonly IParcelRepository _parcelRepository =
         parcelRepository ?? throw new ArgumentNullException(nameof(parcelRepository));
 
+    /// <inheritdoc />
     public async Task<bool> RequiresInsuranceApprovalAsync(Guid parcelId)
     {
         var parcel = await _parcelRepository.GetByIdAsync(parcelId);
         return parcel?.RequiresInsuranceApproval ?? throw new ArgumentException($"Parcel with ID {parcelId} not found");
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<DepartmentDto>> DetermineRequiredDepartmentsAsync(Guid parcelId)
     {
         var parcel = await _parcelRepository.GetByIdAsync(parcelId);
@@ -43,6 +49,7 @@ public class DepartmentRuleService(
         return weightDepartments.Concat(valueDepartments).DistinctBy(d => d.Id);
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<DepartmentDto>> GetDepartmentsByWeightAsync(decimal weight)
     {
         var weightRules = await _businessRuleRepository.GetActiveRulesByTypeAsync(BusinessRuleType.Weight);
@@ -59,6 +66,7 @@ public class DepartmentRuleService(
         return await GetDefaultDepartmentsByWeightAsync(weight);
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<DepartmentDto>> GetDepartmentsByValueAsync(decimal value)
     {
         var valueRules = await _businessRuleRepository.GetActiveRulesByTypeAsync(BusinessRuleType.Value);
@@ -76,8 +84,17 @@ public class DepartmentRuleService(
         return matchingDepartments.Count > 0 ? matchingDepartments : await GetDefaultDepartmentsByValueAsync(value);
     }
 
-    // Default business rules when no custom rules are configured
-    private async Task<IEnumerable<DepartmentDto>> GetDefaultDepartmentsByWeightAsync(decimal weight)
+    /// <inheritdoc />
+    public async Task<IEnumerable<DepartmentDto>> GetDefaultDepartmentsByValueAsync(decimal value)
+    {
+        if (value <= 1000m)
+            return [];
+
+        return await GetSingleDepartmentAsync(DefaultDepartmentNames.Insurance);
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<DepartmentDto>> GetDefaultDepartmentsByWeightAsync(decimal weight)
     {
         return weight switch
         {
@@ -87,13 +104,6 @@ public class DepartmentRuleService(
         };
     }
 
-    private async Task<IEnumerable<DepartmentDto>> GetDefaultDepartmentsByValueAsync(decimal value)
-    {
-        if (value <= 1000m)
-            return [];
-
-        return await GetSingleDepartmentAsync(DefaultDepartmentNames.Insurance);
-    }
 
     private async Task<IEnumerable<DepartmentDto>> GetSingleDepartmentAsync(string departmentName)
     {

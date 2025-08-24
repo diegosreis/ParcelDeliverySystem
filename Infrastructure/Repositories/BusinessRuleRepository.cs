@@ -6,6 +6,7 @@ namespace Infrastructure.Repositories;
 
 public class BusinessRuleRepository : InMemoryRepository<BusinessRule>, IBusinessRuleRepository
 {
+    /// <inheritdoc />
     public async Task<IEnumerable<BusinessRule>> GetActiveRulesByTypeAsync(BusinessRuleType type)
     {
         await Task.CompletedTask;
@@ -17,6 +18,7 @@ public class BusinessRuleRepository : InMemoryRepository<BusinessRule>, IBusines
         }
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<BusinessRule>> GetAllActiveRulesAsync()
     {
         await Task.CompletedTask;
@@ -28,6 +30,7 @@ public class BusinessRuleRepository : InMemoryRepository<BusinessRule>, IBusines
         }
     }
 
+    /// <inheritdoc />
     public async Task<BusinessRule?> GetByNameAsync(string name)
     {
         await Task.CompletedTask;
@@ -38,6 +41,7 @@ public class BusinessRuleRepository : InMemoryRepository<BusinessRule>, IBusines
         }
     }
 
+    /// <inheritdoc />
     protected override Guid GetEntityId(BusinessRule entity)
     {
         return entity.Id;

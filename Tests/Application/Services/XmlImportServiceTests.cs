@@ -233,13 +233,13 @@ public class XmlImportServiceTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal("Container_68465468", result.ContainerId);
-        Assert.Single(result.Parcels); // Should return the existing parcel
+        Assert.Equal(1, result.TotalParcels); // Should return the existing parcel count
         // Verify that AddAsync was NOT called since container already exists
         _mockShippingContainerRepository.Verify(x => x.AddAsync(It.IsAny<ShippingContainer>()), Times.Never);
     }
 
     [Fact]
-    public async Task ImportContainerFromFileAsync_WithValidFile_ShouldReturnContainerDto()
+    public async Task ImportContainerFromXmlFileAsync_WithValidFile_ShouldReturnContainerDto()
     {
         // Arrange
         var tempFilePath = Path.GetTempFileName();
@@ -259,7 +259,7 @@ public class XmlImportServiceTests
         try
         {
             // Act
-            var result = await _xmlImportService.ImportContainerFromFileAsync(tempFilePath);
+            var result = await _xmlImportService.ImportContainerFromXmlFileAsync(tempFilePath);
 
             // Assert
             Assert.NotNull(result);
@@ -274,32 +274,32 @@ public class XmlImportServiceTests
     }
 
     [Fact]
-    public async Task ImportContainerFromFileAsync_WithEmptyFilePath_ShouldThrowArgumentException()
+    public async Task ImportContainerFromXmlFileAsync_WithEmptyFilePath_ShouldThrowArgumentException()
     {
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            _xmlImportService.ImportContainerFromFileAsync(string.Empty));
+            _xmlImportService.ImportContainerFromXmlFileAsync(string.Empty));
         Assert.Contains("File path cannot be empty", exception.Message);
     }
 
     [Fact]
-    public async Task ImportContainerFromFileAsync_WithNullFilePath_ShouldThrowArgumentException()
+    public async Task ImportContainerFromXmlFileAsync_WithNullFilePath_ShouldThrowArgumentException()
     {
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            _xmlImportService.ImportContainerFromFileAsync(null!));
+            _xmlImportService.ImportContainerFromXmlFileAsync(null!));
         Assert.Contains("File path cannot be empty", exception.Message);
     }
 
     [Fact]
-    public async Task ImportContainerFromFileAsync_WithNonExistentFile_ShouldThrowFileNotFoundException()
+    public async Task ImportContainerFromXmlFileAsync_WithNonExistentFile_ShouldThrowFileNotFoundException()
     {
         // Arrange
         var nonExistentPath = "non-existent-file.xml";
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<FileNotFoundException>(() =>
-            _xmlImportService.ImportContainerFromFileAsync(nonExistentPath));
+            _xmlImportService.ImportContainerFromXmlFileAsync(nonExistentPath));
         Assert.Contains($"File not found: {nonExistentPath}", exception.Message);
     }
 

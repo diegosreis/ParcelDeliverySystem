@@ -36,10 +36,71 @@ public class XmlImportService(
         shippingContainerRepository ?? throw new ArgumentNullException(nameof(shippingContainerRepository));
 
     /// <summary>
+    ///     Imports a shipping container from XML content
+    /// </summary>
+    /// <param name="xmlContent"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="InvalidOperationException"></exception>
+    /// <inheritdoc />
+    public async Task<ShippingContainerDto> ImportContainerFromXmlAsync(string xmlContent)
+    {
+        if (string.IsNullOrWhiteSpace(xmlContent))
+        {
+            _logger.LogError("Import failed: XML content cannot be empty");
+            throw new ArgumentException("XML content cannot be empty", nameof(xmlContent));
+        }
+
+        try
+        {
+            _logger.LogInformation("Starting container import from XML");
+
+            var containerXml = DeserializeXml(xmlContent);
+            _logger.LogDebug("XML deserialized successfully. ContainerId: {ContainerId}, ParcelCount: {ParcelCount}",
+                containerXml.Id, containerXml.Parcels.Count);
+
+            var container = await CreateContainerFromXmlAsync(containerXml);
+            var result = MapToShippingContainerDto(container);
+
+            _logger.LogInformation(
+                "Container import completed successfully. ContainerId: {ContainerId}, ImportedParcels: {ParcelCount}",
+                container.ContainerId, container.Parcels.Count);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to import container from XML");
+            throw new InvalidOperationException($"Failed to import container from XML: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    ///     Imports a shipping container from a file
+    /// </summary>
+    /// <param name="filePath"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="FileNotFoundException"></exception>
+    /// <inheritdoc />
+    public async Task<ShippingContainerDto> ImportContainerFromXmlFileAsync(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("File path cannot be empty", nameof(filePath));
+
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException($"File not found: {filePath}");
+
+        var xmlContent = await File.ReadAllTextAsync(filePath);
+        return await ImportContainerFromXmlAsync(xmlContent);
+    }
+
+    /// <summary>
     ///     Validates the XML content and returns true if it is valid, false otherwise
     /// </summary>
     /// <param name="xmlContent"></param>
     /// <returns></returns>
+    /// <inheritdoc />
     public Task<bool> ValidateXmlContentAsync(string xmlContent)
     {
         if (string.IsNullOrWhiteSpace(xmlContent))
@@ -65,64 +126,6 @@ public class XmlImportService(
             _logger.LogError(ex, "XML content validation failed due to parsing error");
             return Task.FromResult(false);
         }
-    }
-
-    /// <summary>
-    ///     Imports a shipping container from XML content
-    /// </summary>
-    /// <param name="xmlContent"></param>
-    /// <returns></returns>
-    /// <exception cref="ArgumentException"></exception>
-    /// <exception cref="InvalidOperationException"></exception>
-    public async Task<ShippingContainerWithParcelsDto> ImportContainerFromXmlAsync(string xmlContent)
-    {
-        if (string.IsNullOrWhiteSpace(xmlContent))
-        {
-            _logger.LogError("Import failed: XML content cannot be empty");
-            throw new ArgumentException("XML content cannot be empty", nameof(xmlContent));
-        }
-
-        try
-        {
-            _logger.LogInformation("Starting container import from XML");
-
-            var containerXml = DeserializeXml(xmlContent);
-            _logger.LogDebug("XML deserialized successfully. ContainerId: {ContainerId}, ParcelCount: {ParcelCount}",
-                containerXml.Id, containerXml.Parcels.Count);
-
-            var container = await CreateContainerFromXmlAsync(containerXml);
-            var result = MapToShippingContainerWithParcelsDto(container);
-
-            _logger.LogInformation(
-                "Container import completed successfully. ContainerId: {ContainerId}, ImportedParcels: {ParcelCount}",
-                container.ContainerId, container.Parcels.Count);
-
-            return result;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to import container from XML");
-            throw new InvalidOperationException($"Failed to import container from XML: {ex.Message}", ex);
-        }
-    }
-
-    /// <summary>
-    ///     Imports a shipping container from a file
-    /// </summary>
-    /// <param name="filePath"></param>
-    /// <returns></returns>
-    /// <exception cref="ArgumentException"></exception>
-    /// <exception cref="FileNotFoundException"></exception>
-    public async Task<ShippingContainerWithParcelsDto> ImportContainerFromFileAsync(string filePath)
-    {
-        if (string.IsNullOrWhiteSpace(filePath))
-            throw new ArgumentException("File path cannot be empty", nameof(filePath));
-
-        if (!File.Exists(filePath))
-            throw new FileNotFoundException($"File not found: {filePath}");
-
-        var xmlContent = await File.ReadAllTextAsync(filePath);
-        return await ImportContainerFromXmlAsync(xmlContent);
     }
 
     private static ContainerXml DeserializeXml(string xmlContent)
@@ -276,7 +279,7 @@ public class XmlImportService(
             // Create a signature for duplicate detection
             var signature = CreateParcelSignature(parcelXml);
 
-            if (parcelSignatures.Contains(signature))
+            if (!parcelSignatures.Add(signature))
             {
                 duplicateCount++;
                 _logger.LogWarning(
@@ -285,7 +288,6 @@ public class XmlImportService(
                 continue;
             }
 
-            parcelSignatures.Add(signature);
             var parcel = await CreateParcelFromXmlAsync(parcelXml);
             processedParcels.Add(parcel);
         }
@@ -377,70 +379,20 @@ public class XmlImportService(
         );
     }
 
-    private static ShippingContainerWithParcelsDto MapToShippingContainerWithParcelsDto(ShippingContainer container)
+
+    private static ShippingContainerDto MapToShippingContainerDto(ShippingContainer container)
     {
-        return new ShippingContainerWithParcelsDto(
+        return new ShippingContainerDto(
             container.Id,
             container.ContainerId,
             container.ShippingDate,
             container.Status,
-            container.Parcels.Select(MapToParcelDto),
+            container.Parcels.Count,
+            container.Parcels.Sum(p => p.Weight),
+            container.Parcels.Sum(p => p.Value),
+            container.Parcels.Count(p => p.AssignedDepartments.Any()),
             container.CreatedAt,
             container.UpdatedAt
-        );
-    }
-
-    private static ParcelDto MapToParcelDto(Parcel parcel)
-    {
-        return new ParcelDto(
-            parcel.Id,
-            MapToCustomerDto(parcel.Recipient),
-            parcel.Weight,
-            parcel.Value,
-            parcel.Status,
-            parcel.AssignedDepartments.Select(MapToDepartmentDto),
-            parcel.CreatedAt,
-            parcel.UpdatedAt
-        );
-    }
-
-    private static CustomerDto MapToCustomerDto(Customer customer)
-    {
-        return new CustomerDto(
-            customer.Id,
-            customer.Name,
-            MapToAddressDto(customer.Address),
-            customer.CreatedAt,
-            customer.UpdatedAt
-        );
-    }
-
-    private static AddressDto MapToAddressDto(Address address)
-    {
-        return new AddressDto(
-            address.Id,
-            address.Street,
-            address.Number,
-            address.Complement,
-            address.Neighborhood,
-            address.City,
-            address.State,
-            address.ZipCode,
-            address.Country,
-            address.CreatedAt,
-            address.UpdatedAt
-        );
-    }
-
-    private static DepartmentDto MapToDepartmentDto(Department department)
-    {
-        return new DepartmentDto(
-            department.Id,
-            department.Name,
-            department.Description,
-            department.IsActive,
-            department.CreatedAt,
-            department.UpdatedAt
         );
     }
 }

@@ -5,6 +5,11 @@ namespace Application.Models;
 /// </summary>
 public class ContainerIntegrityResult
 {
+    /// <summary>
+    ///     Initializes a new instance of the ContainerIntegrityResult class
+    /// </summary>
+    /// <param name="isValid">Indicates whether the container data is valid and consistent</param>
+    /// <param name="issues">Collection of integrity issues found during validation</param>
     public ContainerIntegrityResult(bool isValid, IEnumerable<string> issues)
     {
         IsValid = isValid;

@@ -1,8 +1,6 @@
 using Application.DTOs;
 using Application.Services;
-using Domain.Entities;
 using Domain.Enums;
-using Domain.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers;
@@ -18,21 +16,21 @@ public class ParcelsController : ControllerBase
 {
     private readonly IDepartmentRuleService _departmentRuleService;
     private readonly IParcelProcessingService _parcelProcessingService;
-    private readonly IParcelRepository _parcelRepository;
+    private readonly IParcelService _parcelService;
 
     /// <summary>
     ///     Initializes a new instance of the ParcelsController
     /// </summary>
-    /// <param name="parcelRepository">Repository for parcel data operations</param>
+    /// <param name="parcelService">Service for parcel data operations</param>
     /// <param name="parcelProcessingService">Service for parcel processing operations</param>
     /// <param name="departmentRuleService">Service for department rule evaluation</param>
     /// <exception cref="ArgumentNullException">Thrown when any parameter is null</exception>
     public ParcelsController(
-        IParcelRepository parcelRepository,
+        IParcelService parcelService,
         IParcelProcessingService parcelProcessingService,
         IDepartmentRuleService departmentRuleService)
     {
-        _parcelRepository = parcelRepository ?? throw new ArgumentNullException(nameof(parcelRepository));
+        _parcelService = parcelService ?? throw new ArgumentNullException(nameof(parcelService));
         _parcelProcessingService =
             parcelProcessingService ?? throw new ArgumentNullException(nameof(parcelProcessingService));
         _departmentRuleService =
@@ -52,8 +50,7 @@ public class ParcelsController : ControllerBase
     {
         try
         {
-            var parcels = await _parcelRepository.GetAllAsync();
-            var parcelDtos = parcels.Select(MapToParcelDto);
+            var parcelDtos = await _parcelService.GetAllParcelsAsync();
             return Ok(parcelDtos);
         }
         catch (Exception ex)
@@ -79,16 +76,17 @@ public class ParcelsController : ControllerBase
     [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ParcelDto>> GetParcel(Guid id)
     {
-        if (id == Guid.Empty)
-            return BadRequest(new { error = "Invalid parcel ID", message = "Parcel ID cannot be empty" });
-
         try
         {
-            var parcel = await _parcelRepository.GetByIdAsync(id);
-            if (parcel == null)
+            var parcelDto = await _parcelService.GetParcelByIdAsync(id);
+            if (parcelDto == null)
                 return NotFound(new { error = "Parcel not found", message = $"No parcel found with ID: {id}" });
 
-            return Ok(MapToParcelDto(parcel));
+            return Ok(parcelDto);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = "Invalid parcel ID", message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -111,8 +109,7 @@ public class ParcelsController : ControllerBase
     {
         try
         {
-            var parcels = await _parcelRepository.GetByStatusAsync(status);
-            var parcelDtos = parcels.Select(MapToParcelDto);
+            var parcelDtos = await _parcelService.GetParcelsByStatusAsync(status);
             return Ok(parcelDtos);
         }
         catch (Exception ex)
@@ -135,14 +132,74 @@ public class ParcelsController : ControllerBase
     {
         try
         {
-            var parcels = await _parcelRepository.GetRequiringInsuranceAsync();
-            var parcelDtos = parcels.Select(MapToParcelDto);
+            var parcelDtos = await _parcelService.GetParcelsRequiringInsuranceAsync();
             return Ok(parcelDtos);
         }
         catch (Exception ex)
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new { error = "Failed to retrieve parcels requiring insurance", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    ///     Retrieves parcels by weight range
+    /// </summary>
+    /// <param name="minWeight">Minimum weight in kg</param>
+    /// <param name="maxWeight">Maximum weight in kg</param>
+    /// <returns>A collection of parcels within the specified weight range</returns>
+    /// <response code="200">Returns the list of parcels in the weight range</response>
+    /// <response code="400">Invalid weight parameters</response>
+    /// <response code="500">Internal server error occurred</response>
+    [HttpGet("by-weight")]
+    [ProducesResponseType(typeof(IEnumerable<ParcelDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<IEnumerable<ParcelDto>>> GetParcelsByWeightRange([FromQuery] decimal minWeight, [FromQuery] decimal maxWeight)
+    {
+        try
+        {
+            var parcelDtos = await _parcelService.GetParcelsByWeightRangeAsync(minWeight, maxWeight);
+            return Ok(parcelDtos);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = "Invalid weight parameters", message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { error = "Failed to retrieve parcels by weight range", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    ///     Retrieves parcels by shipping container ID
+    /// </summary>
+    /// <param name="containerId">The unique identifier of the shipping container</param>
+    /// <returns>A collection of parcels in the specified container</returns>
+    /// <response code="200">Returns the list of parcels in the container</response>
+    /// <response code="400">Invalid container ID format</response>
+    /// <response code="500">Internal server error occurred</response>
+    [HttpGet("by-container/{containerId:guid}")]
+    [ProducesResponseType(typeof(IEnumerable<ParcelDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<IEnumerable<ParcelDto>>> GetParcelsByContainer(Guid containerId)
+    {
+        try
+        {
+            var parcelDtos = await _parcelService.GetParcelsByContainerAsync(containerId);
+            return Ok(parcelDtos);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = "Invalid container ID", message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { error = "Failed to retrieve parcels by container", message = ex.Message });
         }
     }
 
@@ -250,79 +307,5 @@ public class ParcelsController : ControllerBase
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new { error = "Failed to determine required departments", message = ex.Message });
         }
-    }
-
-    /// <summary>
-    ///     Maps a Parcel entity to a ParcelDto
-    /// </summary>
-    /// <param name="parcel">The parcel entity to map</param>
-    /// <returns>A ParcelDto representing the parcel</returns>
-    private static ParcelDto MapToParcelDto(Parcel parcel)
-    {
-        return new ParcelDto(
-            parcel.Id,
-            MapToCustomerDto(parcel.Recipient),
-            parcel.Weight,
-            parcel.Value,
-            parcel.Status,
-            parcel.AssignedDepartments.Select(MapToDepartmentDto),
-            parcel.CreatedAt,
-            parcel.UpdatedAt
-        );
-    }
-
-    /// <summary>
-    ///     Maps a Customer entity to a CustomerDto
-    /// </summary>
-    /// <param name="customer">The customer entity to map</param>
-    /// <returns>A CustomerDto representing the customer</returns>
-    private static CustomerDto MapToCustomerDto(Customer customer)
-    {
-        return new CustomerDto(
-            customer.Id,
-            customer.Name,
-            MapToAddressDto(customer.Address),
-            customer.CreatedAt,
-            customer.UpdatedAt
-        );
-    }
-
-    /// <summary>
-    ///     Maps an Address entity to an AddressDto
-    /// </summary>
-    /// <param name="address">The address entity to map</param>
-    /// <returns>An AddressDto representing the address</returns>
-    private static AddressDto MapToAddressDto(Address address)
-    {
-        return new AddressDto(
-            address.Id,
-            address.Street,
-            address.Number,
-            address.Complement,
-            address.Neighborhood,
-            address.City,
-            address.State,
-            address.ZipCode,
-            address.Country,
-            address.CreatedAt,
-            address.UpdatedAt
-        );
-    }
-
-    /// <summary>
-    ///     Maps a Department entity to a DepartmentDto
-    /// </summary>
-    /// <param name="department">The department entity to map</param>
-    /// <returns>A DepartmentDto representing the department</returns>
-    private static DepartmentDto MapToDepartmentDto(Department department)
-    {
-        return new DepartmentDto(
-            department.Id,
-            department.Name,
-            department.Description,
-            department.IsActive,
-            department.CreatedAt,
-            department.UpdatedAt
-        );
     }
 }

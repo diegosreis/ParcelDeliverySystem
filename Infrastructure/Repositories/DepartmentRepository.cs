@@ -7,6 +7,7 @@ public class DepartmentRepository : InMemoryRepository<Department>, IDepartmentR
 {
     private readonly Dictionary<string, Guid> _nameToGuid = new();
 
+    /// <inheritdoc />
     public async Task<Department?> GetByNameAsync(string name)
     {
         await Task.CompletedTask;
@@ -16,6 +17,7 @@ public class DepartmentRepository : InMemoryRepository<Department>, IDepartmentR
         }
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<Department>> GetActiveDepartmentsAsync()
     {
         await Task.CompletedTask;
@@ -27,6 +29,7 @@ public class DepartmentRepository : InMemoryRepository<Department>, IDepartmentR
         }
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<Department>> GetInactiveDepartmentsAsync()
     {
         await Task.CompletedTask;
@@ -38,6 +41,7 @@ public class DepartmentRepository : InMemoryRepository<Department>, IDepartmentR
         }
     }
 
+    /// <inheritdoc />
     public override async Task<Department> AddAsync(Department entity)
     {
         var department = await base.AddAsync(entity);
@@ -50,6 +54,7 @@ public class DepartmentRepository : InMemoryRepository<Department>, IDepartmentR
         return department;
     }
 
+    /// <inheritdoc />
     public override async Task<Department> UpdateAsync(Department entity)
     {
         var department = await base.UpdateAsync(entity);
@@ -62,6 +67,7 @@ public class DepartmentRepository : InMemoryRepository<Department>, IDepartmentR
         return department;
     }
 
+    /// <inheritdoc />
     protected override Guid GetEntityId(Department entity)
     {
         return entity.Id;

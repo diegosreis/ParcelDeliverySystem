@@ -105,7 +105,7 @@ public class XmlImportServiceDuplicationTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal("68465468", result.ContainerId);
-        Assert.Single(result.Parcels);
+        Assert.Equal(1, result.TotalParcels);
 
         // Verify that no new container was created
         _mockShippingContainerRepository.Verify(r => r.AddAsync(It.IsAny<ShippingContainer>()), Times.Never);
@@ -194,7 +194,7 @@ public class XmlImportServiceDuplicationTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal("68465468", result.ContainerId);
-        Assert.Equal(2, result.Parcels.Count()); // Should have 2 unique parcels, not 3
+        Assert.Equal(2, result.TotalParcels); // Should have 2 unique parcels, not 3
 
         // Verify that only 2 parcels were added to repository
         _mockParcelRepository.Verify(r => r.AddAsync(It.IsAny<Parcel>()), Times.Exactly(2));
@@ -256,7 +256,7 @@ public class XmlImportServiceDuplicationTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal("68465468", result.ContainerId);
-        Assert.Single(result.Parcels);
+        Assert.Equal(1, result.TotalParcels);
 
         // Verify container and parcel were created
         _mockShippingContainerRepository.Verify(r => r.AddAsync(It.IsAny<ShippingContainer>()), Times.Once);

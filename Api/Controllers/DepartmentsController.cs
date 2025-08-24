@@ -1,6 +1,5 @@
 using Application.DTOs;
-using Domain.Entities;
-using Domain.Interfaces;
+using Application.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers;
@@ -14,16 +13,16 @@ namespace Api.Controllers;
 [Produces("application/json")]
 public class DepartmentsController : ControllerBase
 {
-    private readonly IDepartmentRepository _departmentRepository;
+    private readonly IDepartmentService _departmentService;
 
     /// <summary>
     ///     Initializes a new instance of the DepartmentsController
     /// </summary>
-    /// <param name="departmentRepository">Repository for department operations</param>
-    /// <exception cref="ArgumentNullException">Thrown when departmentRepository is null</exception>
-    public DepartmentsController(IDepartmentRepository departmentRepository)
+    /// <param name="departmentService">Service for department operations</param>
+    /// <exception cref="ArgumentNullException">Thrown when departmentService is null</exception>
+    public DepartmentsController(IDepartmentService departmentService)
     {
-        _departmentRepository = departmentRepository ?? throw new ArgumentNullException(nameof(departmentRepository));
+        _departmentService = departmentService ?? throw new ArgumentNullException(nameof(departmentService));
     }
 
     /// <summary>
@@ -39,8 +38,7 @@ public class DepartmentsController : ControllerBase
     {
         try
         {
-            var departments = await _departmentRepository.GetAllAsync();
-            var departmentDtos = departments.Select(MapToDepartmentDto);
+            var departmentDtos = await _departmentService.GetAllDepartmentsAsync();
             return Ok(departmentDtos);
         }
         catch (Exception ex)
@@ -63,8 +61,7 @@ public class DepartmentsController : ControllerBase
     {
         try
         {
-            var departments = await _departmentRepository.GetActiveDepartmentsAsync();
-            var departmentDtos = departments.Select(MapToDepartmentDto);
+            var departmentDtos = await _departmentService.GetActiveDepartmentsAsync();
             return Ok(departmentDtos);
         }
         catch (Exception ex)
@@ -87,8 +84,7 @@ public class DepartmentsController : ControllerBase
     {
         try
         {
-            var departments = await _departmentRepository.GetInactiveDepartmentsAsync();
-            var departmentDtos = departments.Select(MapToDepartmentDto);
+            var departmentDtos = await _departmentService.GetInactiveDepartmentsAsync();
             return Ok(departmentDtos);
         }
         catch (Exception ex)
@@ -114,16 +110,17 @@ public class DepartmentsController : ControllerBase
     [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<DepartmentDto>> GetDepartment(Guid id)
     {
-        if (id == Guid.Empty)
-            return BadRequest(new { error = "Invalid department ID", message = "Department ID cannot be empty" });
-
         try
         {
-            var department = await _departmentRepository.GetByIdAsync(id);
-            if (department == null)
+            var departmentDto = await _departmentService.GetDepartmentByIdAsync(id);
+            if (departmentDto == null)
                 return NotFound(new { error = "Department not found", message = $"No department found with ID: {id}" });
 
-            return Ok(MapToDepartmentDto(department));
+            return Ok(departmentDto);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = "Invalid department ID", message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -148,17 +145,17 @@ public class DepartmentsController : ControllerBase
     [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<DepartmentDto>> GetDepartmentByName(string name)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return BadRequest(new { error = "Invalid department name", message = "Department name cannot be empty" });
-
         try
         {
-            var department = await _departmentRepository.GetByNameAsync(name);
-            if (department == null)
-                return NotFound(new
-                    { error = "Department not found", message = $"No department found with name: {name}" });
+            var departmentDto = await _departmentService.GetDepartmentByNameAsync(name);
+            if (departmentDto == null)
+                return NotFound(new { error = "Department not found", message = $"No department found with name: {name}" });
 
-            return Ok(MapToDepartmentDto(department));
+            return Ok(departmentDto);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = "Invalid department name", message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -168,19 +165,197 @@ public class DepartmentsController : ControllerBase
     }
 
     /// <summary>
-    ///     Maps a Department entity to a DepartmentDto
+    ///     Creates a new department in the system
     /// </summary>
-    /// <param name="department">The department entity to map</param>
-    /// <returns>A DepartmentDto representing the department</returns>
-    private static DepartmentDto MapToDepartmentDto(Department department)
+    /// <param name="createDepartmentDto">The department data to create</param>
+    /// <returns>The created department</returns>
+    /// <response code="201">Department created successfully</response>
+    /// <response code="400">Invalid department data</response>
+    /// <response code="409">Department with the same name already exists</response>
+    /// <response code="500">Internal server error occurred</response>
+    [HttpPost]
+    [ProducesResponseType(typeof(DepartmentDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<DepartmentDto>> CreateDepartment([FromBody] CreateDepartmentDto createDepartmentDto)
     {
-        return new DepartmentDto(
-            department.Id,
-            department.Name,
-            department.Description,
-            department.IsActive,
-            department.CreatedAt,
-            department.UpdatedAt
-        );
+        try
+        {
+            var departmentDto = await _departmentService.CreateDepartmentAsync(createDepartmentDto);
+            return CreatedAtAction(nameof(GetDepartment), new { id = departmentDto.Id }, departmentDto);
+        }
+        catch (ArgumentNullException ex)
+        {
+            return BadRequest(new { error = "Invalid department data", message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = "Invalid department data", message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { error = "Department already exists", message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { error = "Failed to create department", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    ///     Updates an existing department
+    /// </summary>
+    /// <param name="id">The unique identifier of the department to update</param>
+    /// <param name="updateDepartmentDto">The updated department data</param>
+    /// <returns>The updated department</returns>
+    /// <response code="200">Department updated successfully</response>
+    /// <response code="400">Invalid department data or ID</response>
+    /// <response code="404">Department not found</response>
+    /// <response code="409">Department name conflict</response>
+    /// <response code="500">Internal server error occurred</response>
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(typeof(DepartmentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<DepartmentDto>> UpdateDepartment(Guid id, [FromBody] UpdateDepartmentDto updateDepartmentDto)
+    {
+        try
+        {
+            var departmentDto = await _departmentService.UpdateDepartmentAsync(id, updateDepartmentDto);
+            return Ok(departmentDto);
+        }
+        catch (ArgumentNullException ex)
+        {
+            return BadRequest(new { error = "Invalid department data", message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = "Invalid department data", message = ex.Message });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("No department found"))
+        {
+            return NotFound(new { error = "Department not found", message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { error = "Department name conflict", message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { error = "Failed to update department", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    ///     Activates a department (makes it available for parcel processing)
+    /// </summary>
+    /// <param name="id">The unique identifier of the department to activate</param>
+    /// <returns>The activated department</returns>
+    /// <response code="200">Department activated successfully</response>
+    /// <response code="400">Invalid department ID</response>
+    /// <response code="404">Department not found</response>
+    /// <response code="500">Internal server error occurred</response>
+    [HttpPatch("{id:guid}/activate")]
+    [ProducesResponseType(typeof(DepartmentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<DepartmentDto>> ActivateDepartment(Guid id)
+    {
+        try
+        {
+            var departmentDto = await _departmentService.ActivateDepartmentAsync(id);
+            return Ok(departmentDto);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = "Invalid department ID", message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { error = "Department not found", message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { error = "Failed to activate department", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    ///     Deactivates a department (removes it from parcel processing without deleting)
+    /// </summary>
+    /// <param name="id">The unique identifier of the department to deactivate</param>
+    /// <returns>The deactivated department</returns>
+    /// <response code="200">Department deactivated successfully</response>
+    /// <response code="400">Invalid department ID</response>
+    /// <response code="404">Department not found</response>
+    /// <response code="500">Internal server error occurred</response>
+    [HttpPatch("{id:guid}/deactivate")]
+    [ProducesResponseType(typeof(DepartmentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<DepartmentDto>> DeactivateDepartment(Guid id)
+    {
+        try
+        {
+            var departmentDto = await _departmentService.DeactivateDepartmentAsync(id);
+            return Ok(departmentDto);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = "Invalid department ID", message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { error = "Department not found", message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { error = "Failed to deactivate department", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    ///     Deletes a department from the system
+    /// </summary>
+    /// <param name="id">The unique identifier of the department to delete</param>
+    /// <returns>No content if successful</returns>
+    /// <response code="204">Department deleted successfully</response>
+    /// <response code="400">Invalid department ID</response>
+    /// <response code="404">Department not found</response>
+    /// <response code="500">Internal server error occurred</response>
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> DeleteDepartment(Guid id)
+    {
+        try
+        {
+            await _departmentService.DeleteDepartmentAsync(id);
+            return NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = "Invalid department ID", message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { error = "Department not found", message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { error = "Failed to delete department", message = ex.Message });
+        }
     }
 }

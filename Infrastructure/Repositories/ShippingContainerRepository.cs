@@ -4,75 +4,46 @@ using Domain.Interfaces;
 
 namespace Infrastructure.Repositories;
 
+/// <summary>
+///     In-memory repository implementation for shipping container entities
+/// </summary>
 public class ShippingContainerRepository : InMemoryRepository<ShippingContainer>, IShippingContainerRepository
 {
-    private readonly Dictionary<string, Guid> _containerIdToGuid = new();
+    /// <summary>
+    ///     Initializes a new instance of the ShippingContainerRepository
+    /// </summary>
+    public ShippingContainerRepository()
+    {
+    }
 
+    /// <inheritdoc />
     public async Task<ShippingContainer?> GetByContainerIdAsync(string containerId)
     {
-        await Task.CompletedTask;
-        lock (Lock)
-        {
-            return _containerIdToGuid.TryGetValue(containerId, out var guid) ? Entities.GetValueOrDefault(guid) : null;
-        }
+        return await Task.FromResult(Entities.Values.FirstOrDefault(c => c.ContainerId == containerId));
     }
 
+    /// <inheritdoc />
+    public async Task<ShippingContainer?> GetWithParcelsAsync(Guid id)
+    {
+        // In this in-memory implementation, parcels are already loaded
+        return await GetByIdAsync(id);
+    }
+
+    /// <inheritdoc />
     public async Task<IEnumerable<ShippingContainer>> GetByStatusAsync(ShippingContainerStatus status)
     {
-        await Task.CompletedTask;
-        lock (Lock)
-        {
-            return Entities.Values
-                .Where(c => c.Status == status)
-                .ToList();
-        }
+        return await Task.FromResult(Entities.Values.Where(c => c.Status == status).ToList());
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<ShippingContainer>> GetByShippingDateRangeAsync(DateTime startDate, DateTime endDate)
     {
-        await Task.CompletedTask;
-        lock (Lock)
-        {
-            return Entities.Values
-                .Where(c => c.ShippingDate >= startDate && c.ShippingDate <= endDate)
-                .ToList();
-        }
+        return await Task.FromResult(Entities.Values
+            .Where(c => c.ShippingDate.Date >= startDate.Date && c.ShippingDate.Date <= endDate.Date)
+            .ToList());
     }
 
-    public override async Task<ShippingContainer> AddAsync(ShippingContainer entity)
-    {
-        var container = await base.AddAsync(entity);
-
-        lock (Lock)
-        {
-            _containerIdToGuid[container.ContainerId] = container.Id;
-        }
-
-        return container;
-    }
-
-    public override async Task<ShippingContainer> UpdateAsync(ShippingContainer entity)
-    {
-        var container = await base.UpdateAsync(entity);
-
-        lock (Lock)
-        {
-            _containerIdToGuid[container.ContainerId] = container.Id;
-        }
-
-        return container;
-    }
-
-    public override async Task DeleteAsync(Guid id)
-    {
-        lock (Lock)
-        {
-            if (Entities.TryGetValue(id, out var container)) _containerIdToGuid.Remove(container.ContainerId);
-        }
-
-        await base.DeleteAsync(id);
-    }
-
+    /// <inheritdoc />
     protected override Guid GetEntityId(ShippingContainer entity)
     {
         return entity.Id;

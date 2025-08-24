@@ -7,14 +7,21 @@ using Microsoft.Extensions.Logging;
 namespace Application.Services;
 
 /// <summary>
-///     Service responsible for initializing default system data during application startup.
-///     This service creates initial departments and business rules that can be modified later through the API.
+///     Service interface for initializing default system data during application startup.
 /// </summary>
 public interface IDataInitializationService
 {
+    /// <summary>
+    ///     Initializes default departments and business rules for the system
+    /// </summary>
+    /// <returns>A task representing the asynchronous initialization operation</returns>
     Task InitializeAsync();
 }
 
+/// <summary>
+///     Service implementation responsible for initializing default system data during application startup.
+///     This service creates initial departments and business rules that can be modified later through the API.
+/// </summary>
 public class DataInitializationService(
     IDepartmentRepository departmentRepository,
     IBusinessRuleRepository businessRuleRepository,
@@ -29,6 +36,7 @@ public class DataInitializationService(
     private readonly ILogger<DataInitializationService> _logger =
         logger ?? throw new ArgumentNullException(nameof(logger));
 
+    /// <inheritdoc />
     public async Task InitializeAsync()
     {
         await InitializeDepartmentsAsync();
@@ -83,7 +91,7 @@ public class DataInitializationService(
             }
 
             // Create default business rules based on requirements
-            var defaultRules = new BusinessRule[]
+            var defaultRules = new[]
             {
                 new BusinessRule("Mail Weight Rule",
                     "Parcels with weight up to 1kg are handled by Mail department",

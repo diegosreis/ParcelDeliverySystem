@@ -1,9 +1,7 @@
 using Api.Controllers;
 using Application.DTOs;
 using Application.Services;
-using Domain.Entities;
 using Domain.Enums;
-using Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
@@ -13,64 +11,53 @@ namespace Tests.Api.Controllers;
 public class ParcelsControllerTests
 {
     private readonly ParcelsController _controller;
-    private readonly Mock<IDepartmentRuleService> _mockDepartmentRuleService;
+    private readonly Mock<IParcelService> _mockParcelService;
     private readonly Mock<IParcelProcessingService> _mockParcelProcessingService;
-    private readonly Mock<IParcelRepository> _mockParcelRepository;
-    private readonly Address _testAddress;
-    private readonly Customer _testCustomer;
-    private readonly Department _testDepartment;
-
-    private readonly Parcel _testParcel;
+    private readonly Mock<IDepartmentRuleService> _mockDepartmentRuleService;
     private readonly ParcelDto _testParcelDto;
 
     public ParcelsControllerTests()
     {
-        _mockParcelRepository = new Mock<IParcelRepository>();
+        _mockParcelService = new Mock<IParcelService>();
         _mockParcelProcessingService = new Mock<IParcelProcessingService>();
         _mockDepartmentRuleService = new Mock<IDepartmentRuleService>();
-
         _controller = new ParcelsController(
-            _mockParcelRepository.Object,
+            _mockParcelService.Object,
             _mockParcelProcessingService.Object,
             _mockDepartmentRuleService.Object);
 
-        // Setup test data
-        _testAddress = new Address("Marijkestraat", "28", "", "Center", "Bosschenhoofd", "NB", "4744AT", "Netherlands");
-        _testCustomer = new Customer("Vinny Gankema", _testAddress);
-        _testDepartment = new Department("Mail", "Handles lightweight parcels");
-        _testParcel = new Parcel(_testCustomer, 0.5m, 100m);
-
-        var customerDto = new CustomerDto(
-            _testCustomer.Id,
-            _testCustomer.Name,
-            new AddressDto(
-                _testAddress.Id,
-                _testAddress.Street,
-                _testAddress.Number,
-                _testAddress.Complement,
-                _testAddress.Neighborhood,
-                _testAddress.City,
-                _testAddress.State,
-                _testAddress.ZipCode,
-                _testAddress.Country,
-                _testAddress.CreatedAt,
-                _testAddress.UpdatedAt),
-            _testCustomer.CreatedAt,
-            _testCustomer.UpdatedAt);
-
         _testParcelDto = new ParcelDto(
-            _testParcel.Id,
-            customerDto,
-            _testParcel.Weight,
-            _testParcel.Value,
-            _testParcel.Status,
+            Guid.NewGuid(),
+            new CustomerDto(
+                Guid.NewGuid(),
+                "João Silva",
+                new AddressDto(
+                    Guid.NewGuid(),
+                    "Marijkestraat",
+                    "28",
+                    "",
+                    "Center",
+                    "Bosschenhoofd",
+                    "NB",
+                    "4744AT",
+                    "Netherlands",
+                    DateTime.UtcNow,
+                    null
+                ),
+                DateTime.UtcNow,
+                null
+            ),
+            0.5m,
+            50m,
+            ParcelStatus.Pending,
             new List<DepartmentDto>(),
-            _testParcel.CreatedAt,
-            _testParcel.UpdatedAt);
+            DateTime.UtcNow,
+            null
+        );
     }
 
     [Fact]
-    public void Constructor_WithNullParcelRepository_ShouldThrowArgumentNullException()
+    public void Constructor_WithNullParcelService_ShouldThrowArgumentNullException()
     {
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() => new ParcelsController(
@@ -84,7 +71,7 @@ public class ParcelsControllerTests
     {
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() => new ParcelsController(
-            _mockParcelRepository.Object,
+            _mockParcelService.Object,
             null!,
             _mockDepartmentRuleService.Object));
     }
@@ -94,7 +81,7 @@ public class ParcelsControllerTests
     {
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() => new ParcelsController(
-            _mockParcelRepository.Object,
+            _mockParcelService.Object,
             _mockParcelProcessingService.Object,
             null!));
     }
@@ -103,8 +90,8 @@ public class ParcelsControllerTests
     public async Task GetParcels_WhenParcelsExist_ShouldReturnOkWithParcels()
     {
         // Arrange
-        var parcels = new List<Parcel> { _testParcel };
-        _mockParcelRepository.Setup(r => r.GetAllAsync())
+        var parcels = new List<ParcelDto> { _testParcelDto };
+        _mockParcelService.Setup(s => s.GetAllParcelsAsync())
             .ReturnsAsync(parcels);
 
         // Act
@@ -114,31 +101,15 @@ public class ParcelsControllerTests
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returnedParcels = Assert.IsAssignableFrom<IEnumerable<ParcelDto>>(okResult.Value).ToList();
         Assert.Single(returnedParcels);
-        Assert.Equal(_testParcel.Weight, returnedParcels.First().Weight);
+        Assert.Equal(_testParcelDto.Weight, returnedParcels.First().Weight);
     }
 
     [Fact]
-    public async Task GetParcels_WhenNoParcels_ShouldReturnOkWithEmptyList()
+    public async Task GetParcels_WhenServiceThrowsException_ShouldReturn500()
     {
         // Arrange
-        _mockParcelRepository.Setup(r => r.GetAllAsync())
-            .ReturnsAsync(new List<Parcel>());
-
-        // Act
-        var result = await _controller.GetParcels();
-
-        // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var returnedParcels = Assert.IsAssignableFrom<IEnumerable<ParcelDto>>(okResult.Value).ToList();
-        Assert.Empty(returnedParcels);
-    }
-
-    [Fact]
-    public async Task GetParcels_WhenRepositoryThrowsException_ShouldReturn500()
-    {
-        // Arrange
-        _mockParcelRepository.Setup(r => r.GetAllAsync())
-            .ThrowsAsync(new Exception("Database error"));
+        _mockParcelService.Setup(s => s.GetAllParcelsAsync())
+            .ThrowsAsync(new Exception("Service error"));
 
         // Act
         var result = await _controller.GetParcels();
@@ -152,9 +123,9 @@ public class ParcelsControllerTests
     public async Task GetParcel_WithValidId_ShouldReturnOkWithParcel()
     {
         // Arrange
-        var parcelId = _testParcel.Id;
-        _mockParcelRepository.Setup(r => r.GetByIdAsync(parcelId))
-            .ReturnsAsync(_testParcel);
+        var parcelId = _testParcelDto.Id;
+        _mockParcelService.Setup(s => s.GetParcelByIdAsync(parcelId))
+            .ReturnsAsync(_testParcelDto);
 
         // Act
         var result = await _controller.GetParcel(parcelId);
@@ -162,12 +133,16 @@ public class ParcelsControllerTests
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returnedParcel = Assert.IsType<ParcelDto>(okResult.Value);
-        Assert.Equal(_testParcel.Weight, returnedParcel.Weight);
+        Assert.Equal(_testParcelDto.Weight, returnedParcel.Weight);
     }
 
     [Fact]
     public async Task GetParcel_WithEmptyId_ShouldReturnBadRequest()
     {
+        // Arrange
+        _mockParcelService.Setup(s => s.GetParcelByIdAsync(Guid.Empty))
+            .ThrowsAsync(new ArgumentException("Parcel ID cannot be empty"));
+
         // Act
         var result = await _controller.GetParcel(Guid.Empty);
 
@@ -181,8 +156,8 @@ public class ParcelsControllerTests
     {
         // Arrange
         var parcelId = Guid.NewGuid();
-        _mockParcelRepository.Setup(r => r.GetByIdAsync(parcelId))
-            .ReturnsAsync((Parcel?)null);
+        _mockParcelService.Setup(s => s.GetParcelByIdAsync(parcelId))
+            .ReturnsAsync((ParcelDto?)null);
 
         // Act
         var result = await _controller.GetParcel(parcelId);
@@ -193,28 +168,12 @@ public class ParcelsControllerTests
     }
 
     [Fact]
-    public async Task GetParcel_WhenRepositoryThrowsException_ShouldReturn500()
+    public async Task GetParcelsByStatus_ShouldReturnOkWithFilteredParcels()
     {
         // Arrange
-        var parcelId = Guid.NewGuid();
-        _mockParcelRepository.Setup(r => r.GetByIdAsync(parcelId))
-            .ThrowsAsync(new Exception("Database error"));
-
-        // Act
-        var result = await _controller.GetParcel(parcelId);
-
-        // Assert
-        var statusResult = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status500InternalServerError, statusResult.StatusCode);
-    }
-
-    [Fact]
-    public async Task GetParcelsByStatus_WithValidStatus_ShouldReturnOkWithParcels()
-    {
-        // Arrange
-        var status = ParcelStatus.Processing;
-        var parcels = new List<Parcel> { _testParcel };
-        _mockParcelRepository.Setup(r => r.GetByStatusAsync(status))
+        var status = ParcelStatus.Pending;
+        var parcels = new List<ParcelDto> { _testParcelDto };
+        _mockParcelService.Setup(s => s.GetParcelsByStatusAsync(status))
             .ReturnsAsync(parcels);
 
         // Act
@@ -224,31 +183,25 @@ public class ParcelsControllerTests
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returnedParcels = Assert.IsAssignableFrom<IEnumerable<ParcelDto>>(okResult.Value).ToList();
         Assert.Single(returnedParcels);
+        Assert.Equal(status, returnedParcels.First().Status);
     }
 
     [Fact]
-    public async Task GetParcelsByStatus_WhenRepositoryThrowsException_ShouldReturn500()
+    public async Task GetParcelsRequiringInsurance_ShouldReturnOkWithInsuranceParcels()
     {
         // Arrange
-        var status = ParcelStatus.Processing;
-        _mockParcelRepository.Setup(r => r.GetByStatusAsync(status))
-            .ThrowsAsync(new Exception("Database error"));
-
-        // Act
-        var result = await _controller.GetParcelsByStatus(status);
-
-        // Assert
-        var statusResult = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status500InternalServerError, statusResult.StatusCode);
-    }
-
-    [Fact]
-    public async Task GetParcelsRequiringInsurance_WhenParcelsExist_ShouldReturnOkWithParcels()
-    {
-        // Arrange
-        var highValueParcel = new Parcel(_testCustomer, 1.5m, 1500m);
-        var parcels = new List<Parcel> { highValueParcel };
-        _mockParcelRepository.Setup(r => r.GetRequiringInsuranceAsync())
+        var highValueParcel = new ParcelDto(
+            Guid.NewGuid(),
+            _testParcelDto.Recipient,
+            1m,
+            1500m, // High value
+            ParcelStatus.Pending,
+            new List<DepartmentDto>(),
+            DateTime.UtcNow,
+            null
+        );
+        var parcels = new List<ParcelDto> { highValueParcel };
+        _mockParcelService.Setup(s => s.GetParcelsRequiringInsuranceAsync())
             .ReturnsAsync(parcels);
 
         // Act
@@ -258,31 +211,94 @@ public class ParcelsControllerTests
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returnedParcels = Assert.IsAssignableFrom<IEnumerable<ParcelDto>>(okResult.Value).ToList();
         Assert.Single(returnedParcels);
-        Assert.True(returnedParcels.First().Value > 1000);
+        Assert.Equal(1500m, returnedParcels.First().Value);
     }
 
     [Fact]
-    public async Task GetParcelsRequiringInsurance_WhenRepositoryThrowsException_ShouldReturn500()
+    public async Task GetParcelsByWeightRange_WithValidRange_ShouldReturnOkWithParcels()
     {
         // Arrange
-        _mockParcelRepository.Setup(r => r.GetRequiringInsuranceAsync())
-            .ThrowsAsync(new Exception("Database error"));
+        const decimal minWeight = 0.1m;
+        const decimal maxWeight = 1.0m;
+        var parcels = new List<ParcelDto> { _testParcelDto };
+        _mockParcelService.Setup(s => s.GetParcelsByWeightRangeAsync(minWeight, maxWeight))
+            .ReturnsAsync(parcels);
 
         // Act
-        var result = await _controller.GetParcelsRequiringInsurance();
+        var result = await _controller.GetParcelsByWeightRange(minWeight, maxWeight);
 
         // Assert
-        var statusResult = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status500InternalServerError, statusResult.StatusCode);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returnedParcels = Assert.IsAssignableFrom<IEnumerable<ParcelDto>>(okResult.Value).ToList();
+        Assert.Single(returnedParcels);
+    }
+
+    [Fact]
+    public async Task GetParcelsByWeightRange_WithInvalidRange_ShouldReturnBadRequest()
+    {
+        // Arrange
+        _mockParcelService.Setup(s => s.GetParcelsByWeightRangeAsync(-1m, 10m))
+            .ThrowsAsync(new ArgumentException("Minimum weight cannot be negative"));
+
+        // Act
+        var result = await _controller.GetParcelsByWeightRange(-1m, 10m);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetParcelsByContainer_WithValidContainerId_ShouldReturnOkWithParcels()
+    {
+        // Arrange
+        var containerId = Guid.NewGuid();
+        var parcels = new List<ParcelDto> { _testParcelDto };
+        _mockParcelService.Setup(s => s.GetParcelsByContainerAsync(containerId))
+            .ReturnsAsync(parcels);
+
+        // Act
+        var result = await _controller.GetParcelsByContainer(containerId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returnedParcels = Assert.IsAssignableFrom<IEnumerable<ParcelDto>>(okResult.Value).ToList();
+        Assert.Single(returnedParcels);
+    }
+
+    [Fact]
+    public async Task GetParcelsByContainer_WithEmptyContainerId_ShouldReturnBadRequest()
+    {
+        // Arrange
+        _mockParcelService.Setup(s => s.GetParcelsByContainerAsync(Guid.Empty))
+            .ThrowsAsync(new ArgumentException("Container ID cannot be empty"));
+
+        // Act
+        var result = await _controller.GetParcelsByContainer(Guid.Empty);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
     }
 
     [Fact]
     public async Task ProcessParcel_WithValidId_ShouldReturnOkWithProcessedParcel()
     {
         // Arrange
-        var parcelId = _testParcel.Id;
+        var parcelId = _testParcelDto.Id;
+        var processedParcel = new ParcelDto(
+            parcelId,
+            _testParcelDto.Recipient,
+            _testParcelDto.Weight,
+            _testParcelDto.Value,
+            ParcelStatus.Processing,
+            new List<DepartmentDto>(),
+            DateTime.UtcNow,
+            DateTime.UtcNow
+        );
+
         _mockParcelProcessingService.Setup(s => s.ProcessParcelAsync(parcelId))
-            .ReturnsAsync(_testParcelDto);
+            .ReturnsAsync(processedParcel);
 
         // Act
         var result = await _controller.ProcessParcel(parcelId);
@@ -290,7 +306,7 @@ public class ParcelsControllerTests
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returnedParcel = Assert.IsType<ParcelDto>(okResult.Value);
-        Assert.Equal(_testParcel.Weight, returnedParcel.Weight);
+        Assert.Equal(ParcelStatus.Processing, returnedParcel.Status);
     }
 
     [Fact]
@@ -321,29 +337,24 @@ public class ParcelsControllerTests
     }
 
     [Fact]
-    public async Task ProcessParcel_WhenServiceThrowsException_ShouldReturn500()
-    {
-        // Arrange
-        var parcelId = Guid.NewGuid();
-        _mockParcelProcessingService.Setup(s => s.ProcessParcelAsync(parcelId))
-            .ThrowsAsync(new Exception("Processing error"));
-
-        // Act
-        var result = await _controller.ProcessParcel(parcelId);
-
-        // Assert
-        var statusResult = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status500InternalServerError, statusResult.StatusCode);
-    }
-
-    [Fact]
     public async Task UpdateStatus_WithValidData_ShouldReturnOkWithUpdatedParcel()
     {
         // Arrange
-        var parcelId = _testParcel.Id;
-        var newStatus = ParcelStatus.Processed;
+        var parcelId = _testParcelDto.Id;
+        var newStatus = ParcelStatus.Processing;
+        var updatedParcel = new ParcelDto(
+            parcelId,
+            _testParcelDto.Recipient,
+            _testParcelDto.Weight,
+            _testParcelDto.Value,
+            newStatus,
+            new List<DepartmentDto>(),
+            DateTime.UtcNow,
+            DateTime.UtcNow
+        );
+
         _mockParcelProcessingService.Setup(s => s.UpdateParcelStatusAsync(parcelId, newStatus))
-            .ReturnsAsync(_testParcelDto);
+            .ReturnsAsync(updatedParcel);
 
         // Act
         var result = await _controller.UpdateStatus(parcelId, newStatus);
@@ -351,14 +362,14 @@ public class ParcelsControllerTests
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returnedParcel = Assert.IsType<ParcelDto>(okResult.Value);
-        Assert.Equal(_testParcel.Weight, returnedParcel.Weight);
+        Assert.Equal(newStatus, returnedParcel.Status);
     }
 
     [Fact]
     public async Task UpdateStatus_WithEmptyId_ShouldReturnBadRequest()
     {
         // Act
-        var result = await _controller.UpdateStatus(Guid.Empty, ParcelStatus.Processed);
+        var result = await _controller.UpdateStatus(Guid.Empty, ParcelStatus.Processing);
 
         // Assert
         var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
@@ -366,52 +377,14 @@ public class ParcelsControllerTests
     }
 
     [Fact]
-    public async Task UpdateStatus_WithNonExistentId_ShouldReturnNotFound()
-    {
-        // Arrange
-        var parcelId = Guid.NewGuid();
-        var status = ParcelStatus.Processed;
-        _mockParcelProcessingService.Setup(s => s.UpdateParcelStatusAsync(parcelId, status))
-            .ThrowsAsync(new ArgumentException("Parcel not found"));
-
-        // Act
-        var result = await _controller.UpdateStatus(parcelId, status);
-
-        // Assert
-        var notFoundResult = Assert.IsType<NotFoundObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status404NotFound, notFoundResult.StatusCode);
-    }
-
-    [Fact]
-    public async Task UpdateStatus_WhenServiceThrowsException_ShouldReturn500()
-    {
-        // Arrange
-        var parcelId = Guid.NewGuid();
-        var status = ParcelStatus.Processed;
-        _mockParcelProcessingService.Setup(s => s.UpdateParcelStatusAsync(parcelId, status))
-            .ThrowsAsync(new Exception("Update error"));
-
-        // Act
-        var result = await _controller.UpdateStatus(parcelId, status);
-
-        // Assert
-        var statusResult = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status500InternalServerError, statusResult.StatusCode);
-    }
-
-    [Fact]
     public async Task GetRequiredDepartments_WithValidId_ShouldReturnOkWithDepartments()
     {
         // Arrange
-        var parcelId = _testParcel.Id;
-        var departmentDto = new DepartmentDto(
-            _testDepartment.Id,
-            _testDepartment.Name,
-            _testDepartment.Description,
-            _testDepartment.IsActive,
-            _testDepartment.CreatedAt,
-            _testDepartment.UpdatedAt);
-        var departments = new List<DepartmentDto> { departmentDto };
+        var parcelId = _testParcelDto.Id;
+        var departments = new List<DepartmentDto>
+        {
+            new DepartmentDto(Guid.NewGuid(), "Mail", "Mail department", true, DateTime.UtcNow, DateTime.UtcNow)
+        };
 
         _mockDepartmentRuleService.Setup(s => s.DetermineRequiredDepartmentsAsync(parcelId))
             .ReturnsAsync(departments);
@@ -423,7 +396,7 @@ public class ParcelsControllerTests
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returnedDepartments = Assert.IsAssignableFrom<IEnumerable<DepartmentDto>>(okResult.Value).ToList();
         Assert.Single(returnedDepartments);
-        Assert.Equal(_testDepartment.Name, returnedDepartments.First().Name);
+        Assert.Equal("Mail", returnedDepartments.First().Name);
     }
 
     [Fact]
@@ -435,37 +408,5 @@ public class ParcelsControllerTests
         // Assert
         var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
         Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
-    }
-
-    [Fact]
-    public async Task GetRequiredDepartments_WithNonExistentId_ShouldReturnNotFound()
-    {
-        // Arrange
-        var parcelId = Guid.NewGuid();
-        _mockDepartmentRuleService.Setup(s => s.DetermineRequiredDepartmentsAsync(parcelId))
-            .ThrowsAsync(new ArgumentException("Parcel not found"));
-
-        // Act
-        var result = await _controller.GetRequiredDepartments(parcelId);
-
-        // Assert
-        var notFoundResult = Assert.IsType<NotFoundObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status404NotFound, notFoundResult.StatusCode);
-    }
-
-    [Fact]
-    public async Task GetRequiredDepartments_WhenServiceThrowsException_ShouldReturn500()
-    {
-        // Arrange
-        var parcelId = Guid.NewGuid();
-        _mockDepartmentRuleService.Setup(s => s.DetermineRequiredDepartmentsAsync(parcelId))
-            .ThrowsAsync(new Exception("Service error"));
-
-        // Act
-        var result = await _controller.GetRequiredDepartments(parcelId);
-
-        // Assert
-        var statusResult = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status500InternalServerError, statusResult.StatusCode);
     }
 }

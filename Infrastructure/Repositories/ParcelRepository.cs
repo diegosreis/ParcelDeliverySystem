@@ -6,6 +6,7 @@ namespace Infrastructure.Repositories;
 
 public class ParcelRepository : InMemoryRepository<Parcel>, IParcelRepository
 {
+    /// <inheritdoc />
     public async Task<IEnumerable<Parcel>> GetByStatusAsync(ParcelStatus status)
     {
         await Task.CompletedTask;
@@ -17,6 +18,7 @@ public class ParcelRepository : InMemoryRepository<Parcel>, IParcelRepository
         }
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<Parcel>> GetByWeightRangeAsync(decimal minWeight, decimal maxWeight)
     {
         await Task.CompletedTask;
@@ -28,6 +30,7 @@ public class ParcelRepository : InMemoryRepository<Parcel>, IParcelRepository
         }
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<Parcel>> GetByValueRangeAsync(decimal minValue, decimal maxValue)
     {
         await Task.CompletedTask;
@@ -39,6 +42,7 @@ public class ParcelRepository : InMemoryRepository<Parcel>, IParcelRepository
         }
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<Parcel>> GetRequiringInsuranceAsync()
     {
         await Task.CompletedTask;
@@ -50,6 +54,7 @@ public class ParcelRepository : InMemoryRepository<Parcel>, IParcelRepository
         }
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<Parcel>> GetByContainerIdAsync(Guid containerId)
     {
         await Task.CompletedTask;
@@ -59,6 +64,7 @@ public class ParcelRepository : InMemoryRepository<Parcel>, IParcelRepository
         }
     }
 
+    /// <inheritdoc />
     protected override Guid GetEntityId(Parcel entity)
     {
         return entity.Id;

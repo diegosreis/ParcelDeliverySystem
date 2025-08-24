@@ -76,6 +76,9 @@ builder.Services.AddScoped<IXmlImportService, XmlImportService>();
 builder.Services.AddScoped<IDepartmentRuleService, DepartmentRuleService>();
 builder.Services.AddScoped<IParcelProcessingService, ParcelProcessingService>();
 builder.Services.AddScoped<IBusinessRuleService, BusinessRuleService>();
+builder.Services.AddScoped<IDepartmentService, DepartmentService>();
+builder.Services.AddScoped<IParcelService, ParcelService>();
+builder.Services.AddScoped<IShippingContainerService, ShippingContainerService>();
 builder.Services.AddScoped<IDataInitializationService, DataInitializationService>();
 
 // Add health checks

@@ -5,35 +5,44 @@ using Domain.Interfaces;
 
 namespace Application.Services;
 
+/// <summary>
+///     Service implementation for managing business rules in the parcel delivery system.
+///     Encapsulates business logic for configurable rules that determine parcel routing and processing.
+/// </summary>
 public class BusinessRuleService(IBusinessRuleRepository businessRuleRepository) : IBusinessRuleService
 {
     private readonly IBusinessRuleRepository _businessRuleRepository =
         businessRuleRepository ?? throw new ArgumentNullException(nameof(businessRuleRepository));
 
+    /// <inheritdoc />
     public async Task<IEnumerable<BusinessRuleDto>> GetAllRulesAsync()
     {
         var rules = await _businessRuleRepository.GetAllAsync();
         return rules.Select(MapToDto);
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<BusinessRuleDto>> GetActiveRulesAsync()
     {
         var rules = await _businessRuleRepository.GetAllActiveRulesAsync();
         return rules.Select(MapToDto);
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<BusinessRuleDto>> GetRulesByTypeAsync(BusinessRuleType type)
     {
         var rules = await _businessRuleRepository.GetActiveRulesByTypeAsync(type);
         return rules.Select(MapToDto);
     }
 
+    /// <inheritdoc />
     public async Task<BusinessRuleDto?> GetRuleByIdAsync(Guid id)
     {
         var rule = await _businessRuleRepository.GetByIdAsync(id);
         return rule != null ? MapToDto(rule) : null;
     }
 
+    /// <inheritdoc />
     public async Task<BusinessRuleDto> CreateRuleAsync(string name, string description, BusinessRuleType type,
         decimal minValue, decimal? maxValue, string targetDepartment)
     {
@@ -42,6 +51,7 @@ public class BusinessRuleService(IBusinessRuleRepository businessRuleRepository)
         return MapToDto(createdRule);
     }
 
+    /// <inheritdoc />
     public async Task<BusinessRuleDto> UpdateRuleAsync(Guid id, string name, string description,
         decimal minValue, decimal? maxValue, string targetDepartment)
     {
@@ -54,6 +64,7 @@ public class BusinessRuleService(IBusinessRuleRepository businessRuleRepository)
         return MapToDto(updatedRule);
     }
 
+    /// <inheritdoc />
     public async Task ActivateRuleAsync(Guid id)
     {
         var rule = await _businessRuleRepository.GetByIdAsync(id);
@@ -64,6 +75,7 @@ public class BusinessRuleService(IBusinessRuleRepository businessRuleRepository)
         await _businessRuleRepository.UpdateAsync(rule);
     }
 
+    /// <inheritdoc />
     public async Task DeactivateRuleAsync(Guid id)
     {
         var rule = await _businessRuleRepository.GetByIdAsync(id);
@@ -74,6 +86,7 @@ public class BusinessRuleService(IBusinessRuleRepository businessRuleRepository)
         await _businessRuleRepository.UpdateAsync(rule);
     }
 
+    /// <inheritdoc />
     public async Task DeleteRuleAsync(Guid id)
     {
         var rule = await _businessRuleRepository.GetByIdAsync(id);

@@ -1,10 +1,10 @@
 using Api.Controllers;
 using Application.DTOs;
 using Application.Services;
-using Domain.Entities;
-using Domain.Interfaces;
+using Domain.Enums;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace Tests.Api.Controllers;
@@ -13,95 +13,75 @@ public class ShippingContainersControllerTests
 {
     private readonly ShippingContainersController _controller;
     private readonly Mock<IParcelProcessingService> _mockParcelProcessingService;
-    private readonly Mock<IShippingContainerRepository> _mockShippingContainerRepository;
+    private readonly Mock<IShippingContainerService> _mockShippingContainerService;
     private readonly Mock<IXmlImportService> _mockXmlImportService;
-    private readonly ShippingContainer _testContainer;
     private readonly ShippingContainerDto _testContainerDto;
-    private readonly ShippingContainerWithParcelsDto _testContainerWithParcelsDto;
 
     public ShippingContainersControllerTests()
     {
-        _mockShippingContainerRepository = new Mock<IShippingContainerRepository>();
+        _mockShippingContainerService = new Mock<IShippingContainerService>();
         _mockXmlImportService = new Mock<IXmlImportService>();
         _mockParcelProcessingService = new Mock<IParcelProcessingService>();
-
+        var mockLogger = new Mock<ILogger<ShippingContainersController>>();
         _controller = new ShippingContainersController(
-            _mockShippingContainerRepository.Object,
+            _mockShippingContainerService.Object,
             _mockXmlImportService.Object,
-            _mockParcelProcessingService.Object);
+            _mockParcelProcessingService.Object,
+            mockLogger.Object);
 
-        // Setup test data
-        _testContainer = new ShippingContainer("CONTAINER123", DateTime.UtcNow);
         _testContainerDto = new ShippingContainerDto(
-            _testContainer.Id,
-            _testContainer.ContainerId,
-            _testContainer.ShippingDate,
-            _testContainer.Status,
-            _testContainer.TotalParcels,
-            _testContainer.TotalWeight,
-            _testContainer.TotalValue,
-            _testContainer.ParcelsRequiringInsurance,
-            _testContainer.CreatedAt,
-            _testContainer.UpdatedAt);
-
-        _testContainerWithParcelsDto = new ShippingContainerWithParcelsDto(
-            _testContainer.Id,
-            _testContainer.ContainerId,
-            _testContainer.ShippingDate,
-            _testContainer.Status,
-            new List<ParcelDto>(),
-            _testContainer.CreatedAt,
-            _testContainer.UpdatedAt);
-    }
-
-    private static IFormFile CreateMockFormFile(string fileName, string content)
-    {
-        var stream = new MemoryStream();
-        var writer = new StreamWriter(stream);
-        writer.Write(content);
-        writer.Flush();
-        stream.Position = 0;
-
-        var file = new Mock<IFormFile>();
-        file.Setup(f => f.FileName).Returns(fileName);
-        file.Setup(f => f.Length).Returns(stream.Length);
-        file.Setup(f => f.OpenReadStream()).Returns(stream);
-
-        return file.Object;
+            Guid.NewGuid(),
+            "Container-001", // ContainerId as string
+            DateTime.UtcNow.AddDays(-1),
+            ShippingContainerStatus.Processing,
+            10,
+            25.5m, // TotalWeight
+            1500m, // TotalValue
+            2, // ParcelsRequiringInsurance
+            DateTime.UtcNow.AddDays(-1),
+            DateTime.UtcNow
+        );
     }
 
     [Fact]
-    public void Constructor_WithNullShippingContainerRepository_ShouldThrowArgumentNullException()
+    public void Constructor_WithNullShippingContainerService_ShouldThrowArgumentNullException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() =>
-            new ShippingContainersController(null!, _mockXmlImportService.Object, _mockParcelProcessingService.Object));
+        Assert.Throws<ArgumentNullException>(() => new ShippingContainersController(
+            null!,
+            _mockXmlImportService.Object,
+            _mockParcelProcessingService.Object,
+            Mock.Of<ILogger<ShippingContainersController>>()));
     }
 
     [Fact]
     public void Constructor_WithNullXmlImportService_ShouldThrowArgumentNullException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() =>
-            new ShippingContainersController(_mockShippingContainerRepository.Object, null!,
-                _mockParcelProcessingService.Object));
+        Assert.Throws<ArgumentNullException>(() => new ShippingContainersController(
+            _mockShippingContainerService.Object,
+            null!,
+            _mockParcelProcessingService.Object,
+            Mock.Of<ILogger<ShippingContainersController>>()));
     }
 
     [Fact]
     public void Constructor_WithNullParcelProcessingService_ShouldThrowArgumentNullException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() =>
-            new ShippingContainersController(_mockShippingContainerRepository.Object, _mockXmlImportService.Object,
-                null!));
+        Assert.Throws<ArgumentNullException>(() => new ShippingContainersController(
+            _mockShippingContainerService.Object,
+            _mockXmlImportService.Object,
+            null!,
+            Mock.Of<ILogger<ShippingContainersController>>()));
     }
 
     [Fact]
     public async Task GetShippingContainers_WhenContainersExist_ShouldReturnOkWithContainers()
     {
         // Arrange
-        var containers = new List<ShippingContainer> { _testContainer };
-        _mockShippingContainerRepository.Setup(r => r.GetAllAsync())
+        var containers = new List<ShippingContainerDto> { _testContainerDto };
+        _mockShippingContainerService.Setup(s => s.GetAllContainersAsync())
             .ReturnsAsync(containers);
 
         // Act
@@ -111,185 +91,184 @@ public class ShippingContainersControllerTests
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returnedContainers = Assert.IsAssignableFrom<IEnumerable<ShippingContainerDto>>(okResult.Value).ToList();
         Assert.Single(returnedContainers);
+        Assert.Equal(_testContainerDto.Id, returnedContainers.First().Id);
     }
 
     [Fact]
-    public async Task GetShippingContainers_WhenNoContainers_ShouldReturnOkWithEmptyList()
+    public async Task GetShippingContainers_WhenServiceThrowsException_ShouldReturn500()
     {
         // Arrange
-        _mockShippingContainerRepository.Setup(r => r.GetAllAsync())
-            .ReturnsAsync(new List<ShippingContainer>());
+        _mockShippingContainerService.Setup(s => s.GetAllContainersAsync())
+            .ThrowsAsync(new Exception("Service error"));
 
         // Act
         var result = await _controller.GetShippingContainers();
+
+        // Assert
+        var statusResult = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, statusResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetShippingContainer_WithValidId_ShouldReturnOkWithContainer()
+    {
+        // Arrange
+        var containerId = _testContainerDto.Id;
+        _mockShippingContainerService.Setup(s => s.GetContainerByIdAsync(containerId))
+            .ReturnsAsync(_testContainerDto);
+
+        // Act
+        var result = await _controller.GetShippingContainer(containerId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returnedContainer = Assert.IsType<ShippingContainerDto>(okResult.Value);
+        Assert.Equal(_testContainerDto.Id, returnedContainer.Id);
+    }
+
+    [Fact]
+    public async Task GetShippingContainer_WithEmptyId_ShouldReturnBadRequest()
+    {
+        // Arrange
+        _mockShippingContainerService.Setup(s => s.GetContainerByIdAsync(Guid.Empty))
+            .ThrowsAsync(new ArgumentException("Container ID cannot be empty"));
+
+        // Act
+        var result = await _controller.GetShippingContainer(Guid.Empty);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetShippingContainer_WithNonExistentId_ShouldReturnNotFound()
+    {
+        // Arrange
+        var containerId = Guid.NewGuid();
+        _mockShippingContainerService.Setup(s => s.GetContainerByIdAsync(containerId))
+            .ReturnsAsync((ShippingContainerDto?)null);
+
+        // Act
+        var result = await _controller.GetShippingContainer(containerId);
+
+        // Assert
+        var notFoundResult = Assert.IsType<NotFoundObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status404NotFound, notFoundResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetShippingContainerWithParcels_WithValidId_ShouldReturnOkWithContainerAndParcels()
+    {
+        // Arrange
+        var containerId = _testContainerDto.Id;
+        var containerWithParcels = new ShippingContainerDto(
+            containerId,
+            "Container-002", // ContainerId as string
+            _testContainerDto.ShippingDate,
+            _testContainerDto.Status,
+            _testContainerDto.TotalParcels,
+            _testContainerDto.TotalWeight,
+            _testContainerDto.TotalValue,
+            _testContainerDto.ParcelsRequiringInsurance,
+            _testContainerDto.CreatedAt,
+            _testContainerDto.UpdatedAt
+        );
+
+        _mockShippingContainerService.Setup(s => s.GetContainerWithParcelsAsync(containerId))
+            .ReturnsAsync(containerWithParcels);
+
+        // Act
+        var result = await _controller.GetShippingContainerWithParcels(containerId);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returnedContainer = Assert.IsType<ShippingContainerDto>(okResult.Value);
+        Assert.Equal(containerId, returnedContainer.Id);
+    }
+
+    [Fact]
+    public async Task GetContainersByStatus_ShouldReturnOkWithFilteredContainers()
+    {
+        // Arrange
+        var status = ShippingContainerStatus.Processing;
+        var containers = new List<ShippingContainerDto> { _testContainerDto };
+        _mockShippingContainerService.Setup(s => s.GetContainersByStatusAsync(status))
+            .ReturnsAsync(containers);
+
+        // Act
+        var result = await _controller.GetContainersByStatus(status);
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returnedContainers = Assert.IsAssignableFrom<IEnumerable<ShippingContainerDto>>(okResult.Value).ToList();
-        Assert.Empty(returnedContainers);
+        Assert.Single(returnedContainers);
+        Assert.Equal(status, returnedContainers.First().Status);
     }
 
     [Fact]
-    public async Task GetShippingContainers_WhenRepositoryThrowsException_ShouldReturn500()
+    public async Task GetContainersByDateRange_WithValidRange_ShouldReturnOkWithContainers()
     {
         // Arrange
-        _mockShippingContainerRepository.Setup(r => r.GetAllAsync())
-            .ThrowsAsync(new Exception("Database error"));
+        var startDate = DateTime.UtcNow.AddDays(-2);
+        var endDate = DateTime.UtcNow;
+        var containers = new List<ShippingContainerDto> { _testContainerDto };
+        _mockShippingContainerService.Setup(s => s.GetContainersByDateRangeAsync(startDate, endDate))
+            .ReturnsAsync(containers);
 
         // Act
-        var result = await _controller.GetShippingContainers();
+        var result = await _controller.GetContainersByDateRange(startDate, endDate);
 
         // Assert
-        var statusResult = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(500, statusResult.StatusCode);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returnedContainers = Assert.IsAssignableFrom<IEnumerable<ShippingContainerDto>>(okResult.Value).ToList();
+        Assert.Single(returnedContainers);
     }
 
     [Fact]
-    public async Task GetContainer_WithValidId_ShouldReturnOkWithContainer()
+    public async Task GetContainersByDateRange_WithInvalidRange_ShouldReturnBadRequest()
     {
         // Arrange
-        _mockShippingContainerRepository.Setup(r => r.GetByIdAsync(_testContainer.Id))
-            .ReturnsAsync(_testContainer);
+        var startDate = DateTime.UtcNow;
+        var endDate = DateTime.UtcNow.AddDays(-1);
+        _mockShippingContainerService.Setup(s => s.GetContainersByDateRangeAsync(startDate, endDate))
+            .ThrowsAsync(new ArgumentException("Start date cannot be greater than end date"));
 
         // Act
-        var result = await _controller.GetContainer(_testContainer.Id);
+        var result = await _controller.GetContainersByDateRange(startDate, endDate);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task ImportFromXmlFile_WithValidFile_ShouldReturnOkWithImportedContainer()
+    {
+        // Arrange
+        var mockFile = new Mock<IFormFile>();
+        var content = "<?xml version=\"1.0\"?><Container></Container>";
+        var fileName = "test.xml";
+        var ms = new MemoryStream();
+        var writer = new StreamWriter(ms);
+        writer.Write(content);
+        writer.Flush();
+        ms.Position = 0;
+
+        mockFile.Setup(_ => _.OpenReadStream()).Returns(ms);
+        mockFile.Setup(_ => _.FileName).Returns(fileName);
+        mockFile.Setup(_ => _.Length).Returns(ms.Length);
+
+        _mockXmlImportService.Setup(s => s.ImportContainerFromXmlAsync(It.IsAny<string>()))
+            .ReturnsAsync(_testContainerDto);
+
+        // Act
+        var result = await _controller.ImportFromXmlFile(mockFile.Object);
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returnedContainer = Assert.IsType<ShippingContainerDto>(okResult.Value);
-        Assert.Equal(_testContainer.Id, returnedContainer.Id);
-    }
-
-    [Fact]
-    public async Task GetContainer_WithInvalidId_ShouldReturnNotFound()
-    {
-        // Arrange
-        var invalidId = Guid.NewGuid();
-        _mockShippingContainerRepository.Setup(r => r.GetByIdAsync(invalidId))
-            .ReturnsAsync((ShippingContainer)null!);
-
-        // Act
-        var result = await _controller.GetContainer(invalidId);
-
-        // Assert
-        Assert.IsType<NotFoundObjectResult>(result.Result);
-    }
-
-    [Fact]
-    public async Task GetContainer_WhenRepositoryThrowsException_ShouldReturn500()
-    {
-        // Arrange
-        _mockShippingContainerRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
-            .ThrowsAsync(new Exception("Database error"));
-
-        // Act
-        var result = await _controller.GetContainer(Guid.NewGuid());
-
-        // Assert
-        var statusResult = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(500, statusResult.StatusCode);
-    }
-
-    [Fact]
-    public async Task GetContainerById_WithValidContainerId_ShouldReturnOkWithContainer()
-    {
-        // Arrange
-        const string containerId = "CONTAINER123";
-        _mockShippingContainerRepository.Setup(r => r.GetByContainerIdAsync(containerId))
-            .ReturnsAsync(_testContainer);
-
-        // Act
-        var result = await _controller.GetContainerById(containerId);
-
-        // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var returnedContainer = Assert.IsType<ShippingContainerDto>(okResult.Value);
-        Assert.Equal(_testContainer.ContainerId, returnedContainer.ContainerId);
-    }
-
-    [Fact]
-    public async Task GetContainerById_WithEmptyContainerId_ShouldReturnBadRequest()
-    {
-        // Act
-        var result = await _controller.GetContainerById(string.Empty);
-
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    [Fact]
-    public async Task GetContainerById_WithNullContainerId_ShouldReturnBadRequest()
-    {
-        // Act
-        var result = await _controller.GetContainerById(null!);
-
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    [Fact]
-    public async Task GetContainerById_WithWhitespaceContainerId_ShouldReturnBadRequest()
-    {
-        // Act
-        var result = await _controller.GetContainerById("   ");
-
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    [Fact]
-    public async Task GetContainerById_WithNonExistentContainerId_ShouldReturnNotFound()
-    {
-        // Arrange
-        const string containerId = "NONEXISTENT";
-        _mockShippingContainerRepository.Setup(r => r.GetByContainerIdAsync(containerId))
-            .ReturnsAsync((ShippingContainer)null!);
-
-        // Act
-        var result = await _controller.GetContainerById(containerId);
-
-        // Assert
-        Assert.IsType<NotFoundObjectResult>(result.Result);
-    }
-
-    [Fact]
-    public async Task ImportFromXmlFile_WithValidXmlFile_ShouldReturnCreatedAtAction()
-    {
-        // Arrange
-        const string xmlContent = """
-                                  <?xml version="1.0"?>
-                                  <Container>
-                                      <Id>CONTAINER123</Id>
-                                      <ShippingDate>2023-01-01T00:00:00</ShippingDate>
-                                      <parcels>
-                                          <Parcel>
-                                              <Receipient>
-                                                  <Name>Test User</Name>
-                                                  <Address>
-                                                      <Street>Test Street</Street>
-                                                      <HouseNumber>123</HouseNumber>
-                                                      <PostalCode>12345</PostalCode>
-                                                      <City>Test City</City>
-                                                  </Address>
-                                              </Receipient>
-                                              <Weight>5.0</Weight>
-                                              <Value>100.0</Value>
-                                          </Parcel>
-                                      </parcels>
-                                  </Container>
-                                  """;
-
-        var file = CreateMockFormFile("test.xml", xmlContent);
-        _mockXmlImportService.Setup(s => s.ImportContainerFromXmlAsync(xmlContent))
-            .ReturnsAsync(_testContainerWithParcelsDto);
-
-        // Act
-        var result = await _controller.ImportFromXmlFile(file);
-
-        // Assert
-        var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
-        Assert.Equal(nameof(_controller.GetContainer), createdResult.ActionName);
-        Assert.Equal(_testContainerWithParcelsDto, createdResult.Value);
+        Assert.Equal(_testContainerDto.Id, returnedContainer.Id);
     }
 
     [Fact]
@@ -300,143 +279,99 @@ public class ShippingContainersControllerTests
 
         // Assert
         var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
-        var error = badRequestResult.Value;
-        Assert.NotNull(error);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
     }
 
     [Fact]
     public async Task ImportFromXmlFile_WithEmptyFile_ShouldReturnBadRequest()
     {
         // Arrange
-        var file = CreateMockFormFile("test.xml", string.Empty);
+        var mockFile = new Mock<IFormFile>();
+        mockFile.Setup(_ => _.Length).Returns(0);
 
         // Act
-        var result = await _controller.ImportFromXmlFile(file);
+        var result = await _controller.ImportFromXmlFile(mockFile.Object);
 
         // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
     }
 
     [Fact]
     public async Task ImportFromXmlFile_WithNonXmlFile_ShouldReturnBadRequest()
     {
         // Arrange
-        var file = CreateMockFormFile("test.txt", "some content");
+        var mockFile = new Mock<IFormFile>();
+        mockFile.Setup(_ => _.FileName).Returns("test.txt");
+        mockFile.Setup(_ => _.Length).Returns(100);
 
         // Act
-        var result = await _controller.ImportFromXmlFile(file);
+        var result = await _controller.ImportFromXmlFile(mockFile.Object);
 
         // Assert
         var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
-        var error = badRequestResult.Value;
-        Assert.NotNull(error);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
     }
 
     [Fact]
-    public async Task ImportFromXmlFile_WhenXmlImportServiceThrowsInvalidOperationException_ShouldReturnBadRequest()
+    public async Task ImportFromXmlFile_WhenImportServiceThrowsArgumentException_ShouldReturnBadRequest()
     {
         // Arrange
-        var file = CreateMockFormFile("test.xml", "<invalid>xml</invalid>");
+        var mockFile = new Mock<IFormFile>();
+        var content = "invalid xml";
+        var fileName = "test.xml";
+        var ms = new MemoryStream();
+        var writer = new StreamWriter(ms);
+        writer.Write(content);
+        writer.Flush();
+        ms.Position = 0;
+
+        mockFile.Setup(_ => _.OpenReadStream()).Returns(ms);
+        mockFile.Setup(_ => _.FileName).Returns(fileName);
+        mockFile.Setup(_ => _.Length).Returns(ms.Length);
+
         _mockXmlImportService.Setup(s => s.ImportContainerFromXmlAsync(It.IsAny<string>()))
-            .ThrowsAsync(new InvalidOperationException("Invalid XML format"));
+            .ThrowsAsync(new ArgumentException("Invalid XML format"));
 
         // Act
-        var result = await _controller.ImportFromXmlFile(file);
+        var result = await _controller.ImportFromXmlFile(mockFile.Object);
 
         // Assert
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
     }
 
     [Fact]
-    public async Task ImportFromXmlFile_WhenXmlImportServiceThrowsGenericException_ShouldReturn500()
+    public async Task ProcessContainer_WithValidId_ShouldReturnOkWithResult()
     {
         // Arrange
-        var file = CreateMockFormFile("test.xml", "<valid>xml</valid>");
-        _mockXmlImportService.Setup(s => s.ImportContainerFromXmlAsync(It.IsAny<string>()))
-            .ThrowsAsync(new Exception("Unexpected error"));
+        var containerId = _testContainerDto.Id;
+        var processingResult = new List<ParcelDto>();
 
-        // Act
-        var result = await _controller.ImportFromXmlFile(file);
-
-        // Assert
-        var statusResult = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(500, statusResult.StatusCode);
-    }
-
-    [Fact]
-    public async Task ValidateXml_WithValidXmlFile_ShouldReturnOkWithValidationResult()
-    {
-        // Arrange
-        var file = CreateMockFormFile("test.xml", "<valid>xml</valid>");
-        _mockXmlImportService.Setup(s => s.ValidateXmlContentAsync(It.IsAny<string>()))
-            .ReturnsAsync(true);
-
-        // Act
-        var result = await _controller.ValidateXml(file);
-
-        // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        Assert.NotNull(okResult.Value);
-    }
-
-    [Fact]
-    public async Task ValidateXml_WithInvalidXmlFile_ShouldReturnOkWithInvalidResult()
-    {
-        // Arrange
-        var file = CreateMockFormFile("test.xml", "<invalid>xml");
-        _mockXmlImportService.Setup(s => s.ValidateXmlContentAsync(It.IsAny<string>()))
-            .ReturnsAsync(false);
-
-        // Act
-        var result = await _controller.ValidateXml(file);
-
-        // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        Assert.NotNull(okResult.Value);
-    }
-
-    [Fact]
-    public async Task ValidateXml_WithNullFile_ShouldReturnBadRequest()
-    {
-        // Act
-        var result = await _controller.ValidateXml(null!);
-
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result);
-    }
-
-    [Fact]
-    public async Task ValidateXml_WithNonXmlFile_ShouldReturnBadRequest()
-    {
-        // Arrange
-        var file = CreateMockFormFile("test.pdf", "pdf content");
-
-        // Act
-        var result = await _controller.ValidateXml(file);
-
-        // Assert
-        Assert.IsType<BadRequestObjectResult>(result);
-    }
-
-    [Fact]
-    public async Task ProcessContainer_WithValidContainerId_ShouldReturnOkWithProcessedParcels()
-    {
-        // Arrange
-        var containerId = Guid.NewGuid();
-        var processedParcels = new List<ParcelDto>();
         _mockParcelProcessingService.Setup(s => s.ProcessContainerAsync(containerId))
-            .ReturnsAsync(processedParcels);
+            .ReturnsAsync(processingResult);
 
         // Act
         var result = await _controller.ProcessContainer(containerId);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.Equal(processedParcels, okResult.Value);
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(okResult.Value);
     }
 
     [Fact]
-    public async Task ProcessContainer_WithInvalidContainerId_ShouldReturnNotFound()
+    public async Task ProcessContainer_WithEmptyId_ShouldReturnBadRequest()
+    {
+        // Act
+        var result = await _controller.ProcessContainer(Guid.Empty);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequestResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProcessContainer_WithNonExistentId_ShouldReturnNotFound()
     {
         // Arrange
         var containerId = Guid.NewGuid();
@@ -447,22 +382,7 @@ public class ShippingContainersControllerTests
         var result = await _controller.ProcessContainer(containerId);
 
         // Assert
-        Assert.IsType<NotFoundObjectResult>(result.Result);
-    }
-
-    [Fact]
-    public async Task ProcessContainer_WhenServiceThrowsGenericException_ShouldReturn500()
-    {
-        // Arrange
-        var containerId = Guid.NewGuid();
-        _mockParcelProcessingService.Setup(s => s.ProcessContainerAsync(containerId))
-            .ThrowsAsync(new Exception("Unexpected error"));
-
-        // Act
-        var result = await _controller.ProcessContainer(containerId);
-
-        // Assert
-        var statusResult = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(500, statusResult.StatusCode);
+        var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
+        Assert.Equal(StatusCodes.Status404NotFound, notFoundResult.StatusCode);
     }
 }

@@ -7,6 +7,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Services;
 
+/// <summary>
+///     Service implementation for processing parcels through the delivery system.
+///     Handles parcel status updates, department assignments, and batch processing operations.
+/// </summary>
 public class ParcelProcessingService(
     IParcelRepository parcelRepository,
     IShippingContainerRepository shippingContainerRepository,
@@ -30,6 +34,7 @@ public class ParcelProcessingService(
     private readonly IShippingContainerRepository _shippingContainerRepository =
         shippingContainerRepository ?? throw new ArgumentNullException(nameof(shippingContainerRepository));
 
+    /// <inheritdoc />
     public async Task<ParcelDto> ProcessParcelAsync(Guid parcelId)
     {
         _logger.LogInformation("Starting parcel processing for ParcelId: {ParcelId}", parcelId);
@@ -81,6 +86,7 @@ public class ParcelProcessingService(
         }
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<ParcelDto>> ProcessContainerAsync(Guid containerId)
     {
         _logger.LogInformation("Starting container processing for ContainerId: {ContainerId}", containerId);
@@ -114,6 +120,7 @@ public class ParcelProcessingService(
         }
     }
 
+    /// <inheritdoc />
     public async Task<ParcelDto> AssignDepartmentAsync(Guid parcelId, Guid departmentId)
     {
         var parcel = await _parcelRepository.GetByIdAsync(parcelId);
@@ -130,6 +137,7 @@ public class ParcelProcessingService(
         return MapToParcelDto(updatedParcel);
     }
 
+    /// <inheritdoc />
     public async Task<ParcelDto> RemoveDepartmentAsync(Guid parcelId, Guid departmentId)
     {
         var parcel = await _parcelRepository.GetByIdAsync(parcelId);
@@ -146,6 +154,7 @@ public class ParcelProcessingService(
         return MapToParcelDto(updatedParcel);
     }
 
+    /// <inheritdoc />
     public async Task<ParcelDto> UpdateParcelStatusAsync(Guid parcelId, ParcelStatus status)
     {
         var parcel = await _parcelRepository.GetByIdAsync(parcelId);
@@ -158,6 +167,7 @@ public class ParcelProcessingService(
         return MapToParcelDto(updatedParcel);
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<DepartmentDto>> GetAssignedDepartmentsAsync(Guid parcelId)
     {
         var parcel = await _parcelRepository.GetByIdAsync(parcelId);

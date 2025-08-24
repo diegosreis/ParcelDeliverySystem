@@ -43,17 +43,19 @@ public class ShippingContainersController : ControllerBase
     /// <summary>
     ///     Retrieves all shipping containers
     /// </summary>
+    /// <param name="includeParcelDetails">Whether to include detailed parcel information</param>
     /// <returns>A list of shipping containers</returns>
     /// <response code="200">Returns the list of containers</response>
     /// <response code="500">Internal server error</response>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<ShippingContainerDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<IEnumerable<ShippingContainerDto>>> GetShippingContainers()
+    public async Task<ActionResult<IEnumerable<ShippingContainerDto>>> GetShippingContainers(
+        [FromQuery] bool includeParcelDetails = false)
     {
         try
         {
-            var containerDtos = await _shippingContainerService.GetAllContainersAsync();
+            var containerDtos = await _shippingContainerService.GetAllContainersAsync(includeParcelDetails);
             return Ok(containerDtos);
         }
         catch (Exception ex)
@@ -67,6 +69,7 @@ public class ShippingContainersController : ControllerBase
     ///     Retrieves a specific shipping container by ID
     /// </summary>
     /// <param name="id">The unique identifier of the container</param>
+    /// <param name="includeParcelDetails">Whether to include detailed parcel information</param>
     /// <returns>The container with the specified ID</returns>
     /// <response code="200">Returns the requested container</response>
     /// <response code="400">Invalid container ID format</response>
@@ -77,11 +80,12 @@ public class ShippingContainersController : ControllerBase
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<ShippingContainerDto>> GetShippingContainer(Guid id)
+    public async Task<ActionResult<ShippingContainerDto>> GetShippingContainer(Guid id,
+        [FromQuery] bool includeParcelDetails = false)
     {
         try
         {
-            var containerDto = await _shippingContainerService.GetContainerByIdAsync(id);
+            var containerDto = await _shippingContainerService.GetContainerByIdAsync(id, includeParcelDetails);
             if (containerDto == null)
                 return NotFound(new { error = "Container not found", message = $"No container found with ID: {id}" });
 
@@ -108,11 +112,11 @@ public class ShippingContainersController : ControllerBase
     /// <response code="404">Container not found</response>
     /// <response code="500">Internal server error</response>
     [HttpGet("{id:guid}/with-parcels")]
-    [ProducesResponseType(typeof(ShippingContainerDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ShippingContainerWithParcelsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<ShippingContainerDto>> GetShippingContainerWithParcels(Guid id)
+    public async Task<ActionResult<ShippingContainerWithParcelsDto>> GetShippingContainerWithParcels(Guid id)
     {
         try
         {
@@ -137,6 +141,7 @@ public class ShippingContainersController : ControllerBase
     ///     Retrieves containers by status
     /// </summary>
     /// <param name="status">The container status to filter by</param>
+    /// <param name="includeParcelDetails">Whether to include detailed parcel information</param>
     /// <returns>A collection of containers with the specified status</returns>
     /// <response code="200">Returns the list of containers with the specified status</response>
     /// <response code="500">Internal server error</response>
@@ -144,11 +149,11 @@ public class ShippingContainersController : ControllerBase
     [ProducesResponseType(typeof(IEnumerable<ShippingContainerDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<IEnumerable<ShippingContainerDto>>> GetContainersByStatus(
-        ShippingContainerStatus status)
+        ShippingContainerStatus status, [FromQuery] bool includeParcelDetails = false)
     {
         try
         {
-            var containerDtos = await _shippingContainerService.GetContainersByStatusAsync(status);
+            var containerDtos = await _shippingContainerService.GetContainersByStatusAsync(status, includeParcelDetails);
             return Ok(containerDtos);
         }
         catch (Exception ex)
@@ -163,6 +168,7 @@ public class ShippingContainersController : ControllerBase
     /// </summary>
     /// <param name="startDate">Start date for the range</param>
     /// <param name="endDate">End date for the range</param>
+    /// <param name="includeParcelDetails">Whether to include detailed parcel information</param>
     /// <returns>A collection of containers shipped within the date range</returns>
     /// <response code="200">Returns the list of containers in the date range</response>
     /// <response code="400">Invalid date parameters</response>
@@ -172,11 +178,11 @@ public class ShippingContainersController : ControllerBase
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<IEnumerable<ShippingContainerDto>>> GetContainersByDateRange(
-        [FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
+        [FromQuery] DateTime startDate, [FromQuery] DateTime endDate, [FromQuery] bool includeParcelDetails = false)
     {
         try
         {
-            var containerDtos = await _shippingContainerService.GetContainersByDateRangeAsync(startDate, endDate);
+            var containerDtos = await _shippingContainerService.GetContainersByDateRangeAsync(startDate, endDate, includeParcelDetails);
             return Ok(containerDtos);
         }
         catch (ArgumentException ex)

@@ -4,7 +4,6 @@ namespace Application.Services;
 
 /// <summary>
 ///     Service interface for managing departments in the parcel delivery system.
-///     Provides business logic for department operations while maintaining separation of concerns.
 /// </summary>
 public interface IDepartmentService
 {

@@ -5,7 +5,6 @@ namespace Application.Services;
 
 /// <summary>
 ///     Service interface for managing parcels in the delivery system.
-///     Provides business logic for parcel operations while maintaining separation of concerns.
 /// </summary>
 public interface IParcelService
 {

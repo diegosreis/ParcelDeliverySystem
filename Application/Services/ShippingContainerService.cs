@@ -30,16 +30,16 @@ public class ShippingContainerService : IShippingContainerService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<ShippingContainerDto>> GetAllContainersAsync()
+    public async Task<IEnumerable<ShippingContainerDto>> GetAllContainersAsync(bool includeParcelDetails = false)
     {
         _logger.LogInformation("Retrieving all shipping containers");
 
         var containers = await _containerRepository.GetAllAsync();
-        return containers.Select(MapToContainerDto);
+        return containers.Select(container => MapToContainerDto(container, includeParcelDetails));
     }
 
     /// <inheritdoc />
-    public async Task<ShippingContainerDto?> GetContainerByIdAsync(Guid id)
+    public async Task<ShippingContainerDto?> GetContainerByIdAsync(Guid id, bool includeParcelDetails = false)
     {
         if (id == Guid.Empty)
         {
@@ -50,21 +50,21 @@ public class ShippingContainerService : IShippingContainerService
         _logger.LogInformation("Retrieving container with ID: {ContainerId}", id);
 
         var container = await _containerRepository.GetByIdAsync(id);
-        return container != null ? MapToContainerDto(container) : null;
+        return container != null ? MapToContainerDto(container, includeParcelDetails) : null;
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<ShippingContainerDto>> GetContainersByStatusAsync(ShippingContainerStatus status)
+    public async Task<IEnumerable<ShippingContainerDto>> GetContainersByStatusAsync(ShippingContainerStatus status, bool includeParcelDetails = false)
     {
         _logger.LogInformation("Retrieving containers with status: {Status}", status);
 
         var containers = await _containerRepository.GetByStatusAsync(status);
-        return containers.Select(MapToContainerDto);
+        return containers.Select(container => MapToContainerDto(container, includeParcelDetails));
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<ShippingContainerDto>> GetContainersByDateRangeAsync(DateTime startDate,
-        DateTime endDate)
+        DateTime endDate, bool includeParcelDetails = false)
     {
         if (startDate > endDate)
             throw new ArgumentException("Start date cannot be greater than end date", nameof(startDate));
@@ -72,11 +72,11 @@ public class ShippingContainerService : IShippingContainerService
         _logger.LogInformation("Retrieving containers shipped between {StartDate} and {EndDate}", startDate, endDate);
 
         var containers = await _containerRepository.GetByShippingDateRangeAsync(startDate, endDate);
-        return containers.Select(MapToContainerDto);
+        return containers.Select(container => MapToContainerDto(container, includeParcelDetails));
     }
 
     /// <inheritdoc />
-    public async Task<ShippingContainerDto?> GetContainerWithParcelsAsync(Guid id)
+    public async Task<ShippingContainerWithParcelsDto?> GetContainerWithParcelsAsync(Guid id)
     {
         if (id == Guid.Empty)
         {
@@ -87,19 +87,20 @@ public class ShippingContainerService : IShippingContainerService
         _logger.LogInformation("Retrieving detailed container information with parcels for ID: {ContainerId}", id);
 
         var container = await _containerRepository.GetWithParcelsAsync(id);
-        return container != null ? MapToContainerDto(container) : null;
+        return container != null ? MapToContainerWithParcelsDto(container) : null;
     }
 
     /// <summary>
     ///     Maps a ShippingContainer entity to a ShippingContainerDto
     /// </summary>
     /// <param name="container">The container entity to map</param>
+    /// <param name="includeParcelDetails">Whether to include detailed parcel information</param>
     /// <returns>The mapped container DTO</returns>
-    private static ShippingContainerDto MapToContainerDto(ShippingContainer container)
+    private static ShippingContainerDto MapToContainerDto(ShippingContainer container, bool includeParcelDetails = false)
     {
         return new ShippingContainerDto(
             container.Id,
-            container.ContainerId, // Use the actual ContainerId property
+            container.ContainerId,
             container.ShippingDate,
             container.Status,
             container.Parcels.Count,
@@ -112,11 +113,11 @@ public class ShippingContainerService : IShippingContainerService
     }
 
     /// <summary>
-    ///     Maps a ShippingContainer entity to a ShippingContainerDto with full parcel details
+    ///     Maps a ShippingContainer entity to a ShippingContainerWithParcelsDto with full parcel details
     /// </summary>
     /// <param name="container">The container entity to map</param>
     /// <returns>The mapped container DTO with parcels</returns>
-    private static ShippingContainerDto MapToContainerDtoWithParcels(ShippingContainer container)
+    private static ShippingContainerWithParcelsDto MapToContainerWithParcelsDto(ShippingContainer container)
     {
         var parcelDtos = container.Parcels.Select(parcel => new ParcelDto(
             parcel.Id,
@@ -154,15 +155,12 @@ public class ShippingContainerService : IShippingContainerService
             parcel.UpdatedAt
         ));
 
-        return new ShippingContainerDto(
+        return new ShippingContainerWithParcelsDto(
             container.Id,
-            container.Id.ToString(), // ContainerId - using ID as string
+            container.ContainerId,
             container.ShippingDate,
             container.Status,
-            container.TotalParcels,
-            0m, // TotalWeight - calculated value
-            0m, // TotalValue - calculated value
-            0, // ParcelsRequiringInsurance - calculated value
+            parcelDtos,
             container.CreatedAt,
             container.UpdatedAt
         );

@@ -58,6 +58,24 @@ public class ShippingContainerServiceTests
     }
 
     [Fact]
+    public async Task GetAllContainersAsync_WithIncludeParcelDetails_ShouldReturnMappedContainers()
+    {
+        // Arrange
+        var containers = new List<ShippingContainer> { _testContainer };
+        _mockContainerRepository.Setup(r => r.GetAllAsync())
+            .ReturnsAsync(containers);
+
+        // Act
+        var result = await _service.GetAllContainersAsync(true);
+
+        // Assert
+        var containerDtos = result.ToList();
+        Assert.Single(containerDtos);
+        Assert.Equal(_testContainer.Id, containerDtos.First().Id);
+        Assert.Equal(_testContainer.ShippingDate, containerDtos.First().ShippingDate);
+    }
+
+    [Fact]
     public async Task GetContainerByIdAsync_WithValidId_ShouldReturnMappedContainer()
     {
         // Arrange
@@ -67,6 +85,23 @@ public class ShippingContainerServiceTests
 
         // Act
         var result = await _service.GetContainerByIdAsync(containerId);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(_testContainer.Id, result.Id);
+        Assert.Equal(_testContainer.ShippingDate, result.ShippingDate);
+    }
+
+    [Fact]
+    public async Task GetContainerByIdAsync_WithValidIdAndIncludeParcelDetails_ShouldReturnMappedContainer()
+    {
+        // Arrange
+        var containerId = _testContainer.Id;
+        _mockContainerRepository.Setup(r => r.GetByIdAsync(containerId))
+            .ReturnsAsync(_testContainer);
+
+        // Act
+        var result = await _service.GetContainerByIdAsync(containerId, true);
 
         // Assert
         Assert.NotNull(result);
@@ -103,13 +138,31 @@ public class ShippingContainerServiceTests
     public async Task GetContainersByStatusAsync_ShouldReturnMappedContainers()
     {
         // Arrange
-        var status = ShippingContainerStatus.Processing;
+        const ShippingContainerStatus status = ShippingContainerStatus.Processing;
         var containers = new List<ShippingContainer> { _testContainer };
         _mockContainerRepository.Setup(r => r.GetByStatusAsync(status))
             .ReturnsAsync(containers);
 
         // Act
         var result = await _service.GetContainersByStatusAsync(status);
+
+        // Assert
+        var containerDtos = result.ToList();
+        Assert.Single(containerDtos);
+        Assert.Equal(_testContainer.Status, containerDtos.First().Status);
+    }
+
+    [Fact]
+    public async Task GetContainersByStatusAsync_WithIncludeParcelDetails_ShouldReturnMappedContainers()
+    {
+        // Arrange
+        const ShippingContainerStatus status = ShippingContainerStatus.Processing;
+        var containers = new List<ShippingContainer> { _testContainer };
+        _mockContainerRepository.Setup(r => r.GetByStatusAsync(status))
+            .ReturnsAsync(containers);
+
+        // Act
+        var result = await _service.GetContainersByStatusAsync(status, true);
 
         // Assert
         var containerDtos = result.ToList();
@@ -129,6 +182,25 @@ public class ShippingContainerServiceTests
 
         // Act
         var result = await _service.GetContainersByDateRangeAsync(startDate, endDate);
+
+        // Assert
+        var containerDtos = result.ToList();
+        Assert.Single(containerDtos);
+        Assert.Equal(_testContainer.ShippingDate, containerDtos.First().ShippingDate);
+    }
+
+    [Fact]
+    public async Task GetContainersByDateRangeAsync_WithIncludeParcelDetails_ShouldReturnMappedContainers()
+    {
+        // Arrange
+        var startDate = DateTime.UtcNow.AddDays(-2);
+        var endDate = DateTime.UtcNow;
+        var containers = new List<ShippingContainer> { _testContainer };
+        _mockContainerRepository.Setup(r => r.GetByShippingDateRangeAsync(startDate, endDate))
+            .ReturnsAsync(containers);
+
+        // Act
+        var result = await _service.GetContainersByDateRangeAsync(startDate, endDate, true);
 
         // Assert
         var containerDtos = result.ToList();

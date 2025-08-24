@@ -16,6 +16,7 @@ public class ShippingContainersControllerTests
     private readonly Mock<IShippingContainerService> _mockShippingContainerService;
     private readonly Mock<IXmlImportService> _mockXmlImportService;
     private readonly ShippingContainerDto _testContainerDto;
+    private readonly ShippingContainerWithParcelsDto _testContainerWithParcelsDto;
 
     public ShippingContainersControllerTests()
     {
@@ -31,13 +32,23 @@ public class ShippingContainersControllerTests
 
         _testContainerDto = new ShippingContainerDto(
             Guid.NewGuid(),
-            "Container-001", // ContainerId as string
+            "Container-001",
             DateTime.UtcNow.AddDays(-1),
             ShippingContainerStatus.Processing,
             10,
-            25.5m, // TotalWeight
-            1500m, // TotalValue
-            2, // ParcelsRequiringInsurance
+            25.5m,
+            1500m,
+            2,
+            DateTime.UtcNow.AddDays(-1),
+            DateTime.UtcNow
+        );
+
+        _testContainerWithParcelsDto = new ShippingContainerWithParcelsDto(
+            Guid.NewGuid(),
+            "Container-002",
+            DateTime.UtcNow.AddDays(-1),
+            ShippingContainerStatus.Processing,
+            new List<ParcelDto>(),
             DateTime.UtcNow.AddDays(-1),
             DateTime.UtcNow
         );
@@ -81,7 +92,7 @@ public class ShippingContainersControllerTests
     {
         // Arrange
         var containers = new List<ShippingContainerDto> { _testContainerDto };
-        _mockShippingContainerService.Setup(s => s.GetAllContainersAsync())
+        _mockShippingContainerService.Setup(s => s.GetAllContainersAsync(It.IsAny<bool>()))
             .ReturnsAsync(containers);
 
         // Act
@@ -98,7 +109,7 @@ public class ShippingContainersControllerTests
     public async Task GetShippingContainers_WhenServiceThrowsException_ShouldReturn500()
     {
         // Arrange
-        _mockShippingContainerService.Setup(s => s.GetAllContainersAsync())
+        _mockShippingContainerService.Setup(s => s.GetAllContainersAsync(It.IsAny<bool>()))
             .ThrowsAsync(new Exception("Service error"));
 
         // Act
@@ -114,7 +125,7 @@ public class ShippingContainersControllerTests
     {
         // Arrange
         var containerId = _testContainerDto.Id;
-        _mockShippingContainerService.Setup(s => s.GetContainerByIdAsync(containerId))
+        _mockShippingContainerService.Setup(s => s.GetContainerByIdAsync(containerId, It.IsAny<bool>()))
             .ReturnsAsync(_testContainerDto);
 
         // Act
@@ -130,7 +141,7 @@ public class ShippingContainersControllerTests
     public async Task GetShippingContainer_WithEmptyId_ShouldReturnBadRequest()
     {
         // Arrange
-        _mockShippingContainerService.Setup(s => s.GetContainerByIdAsync(Guid.Empty))
+        _mockShippingContainerService.Setup(s => s.GetContainerByIdAsync(Guid.Empty, It.IsAny<bool>()))
             .ThrowsAsync(new ArgumentException("Container ID cannot be empty"));
 
         // Act
@@ -146,7 +157,7 @@ public class ShippingContainersControllerTests
     {
         // Arrange
         var containerId = Guid.NewGuid();
-        _mockShippingContainerService.Setup(s => s.GetContainerByIdAsync(containerId))
+        _mockShippingContainerService.Setup(s => s.GetContainerByIdAsync(containerId, It.IsAny<bool>()))
             .ReturnsAsync((ShippingContainerDto?)null);
 
         // Act
@@ -161,29 +172,16 @@ public class ShippingContainersControllerTests
     public async Task GetShippingContainerWithParcels_WithValidId_ShouldReturnOkWithContainerAndParcels()
     {
         // Arrange
-        var containerId = _testContainerDto.Id;
-        var containerWithParcels = new ShippingContainerDto(
-            containerId,
-            "Container-002", // ContainerId as string
-            _testContainerDto.ShippingDate,
-            _testContainerDto.Status,
-            _testContainerDto.TotalParcels,
-            _testContainerDto.TotalWeight,
-            _testContainerDto.TotalValue,
-            _testContainerDto.ParcelsRequiringInsurance,
-            _testContainerDto.CreatedAt,
-            _testContainerDto.UpdatedAt
-        );
-
+        var containerId = _testContainerWithParcelsDto.Id;
         _mockShippingContainerService.Setup(s => s.GetContainerWithParcelsAsync(containerId))
-            .ReturnsAsync(containerWithParcels);
+            .ReturnsAsync(_testContainerWithParcelsDto);
 
         // Act
         var result = await _controller.GetShippingContainerWithParcels(containerId);
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var returnedContainer = Assert.IsType<ShippingContainerDto>(okResult.Value);
+        var returnedContainer = Assert.IsType<ShippingContainerWithParcelsDto>(okResult.Value);
         Assert.Equal(containerId, returnedContainer.Id);
     }
 
@@ -191,9 +189,9 @@ public class ShippingContainersControllerTests
     public async Task GetContainersByStatus_ShouldReturnOkWithFilteredContainers()
     {
         // Arrange
-        var status = ShippingContainerStatus.Processing;
+        const ShippingContainerStatus status = ShippingContainerStatus.Processing;
         var containers = new List<ShippingContainerDto> { _testContainerDto };
-        _mockShippingContainerService.Setup(s => s.GetContainersByStatusAsync(status))
+        _mockShippingContainerService.Setup(s => s.GetContainersByStatusAsync(status, It.IsAny<bool>()))
             .ReturnsAsync(containers);
 
         // Act
@@ -213,7 +211,7 @@ public class ShippingContainersControllerTests
         var startDate = DateTime.UtcNow.AddDays(-2);
         var endDate = DateTime.UtcNow;
         var containers = new List<ShippingContainerDto> { _testContainerDto };
-        _mockShippingContainerService.Setup(s => s.GetContainersByDateRangeAsync(startDate, endDate))
+        _mockShippingContainerService.Setup(s => s.GetContainersByDateRangeAsync(startDate, endDate, It.IsAny<bool>()))
             .ReturnsAsync(containers);
 
         // Act
@@ -231,7 +229,7 @@ public class ShippingContainersControllerTests
         // Arrange
         var startDate = DateTime.UtcNow;
         var endDate = DateTime.UtcNow.AddDays(-1);
-        _mockShippingContainerService.Setup(s => s.GetContainersByDateRangeAsync(startDate, endDate))
+        _mockShippingContainerService.Setup(s => s.GetContainersByDateRangeAsync(startDate, endDate, It.IsAny<bool>()))
             .ThrowsAsync(new ArgumentException("Start date cannot be greater than end date"));
 
         // Act
@@ -246,18 +244,18 @@ public class ShippingContainersControllerTests
     public async Task ImportFromXmlFile_WithValidFile_ShouldReturnOkWithImportedContainer()
     {
         // Arrange
+        const string content = "<?xml version=\"1.0\"?><Container></Container>";
+        const string fileName = "test.xml";
         var mockFile = new Mock<IFormFile>();
-        var content = "<?xml version=\"1.0\"?><Container></Container>";
-        var fileName = "test.xml";
         var ms = new MemoryStream();
         var writer = new StreamWriter(ms);
-        writer.Write(content);
-        writer.Flush();
+        await writer.WriteAsync(content);
+        await writer.FlushAsync();
         ms.Position = 0;
 
-        mockFile.Setup(_ => _.OpenReadStream()).Returns(ms);
-        mockFile.Setup(_ => _.FileName).Returns(fileName);
-        mockFile.Setup(_ => _.Length).Returns(ms.Length);
+        mockFile.Setup(f => f.OpenReadStream()).Returns(ms);
+        mockFile.Setup(f => f.FileName).Returns(fileName);
+        mockFile.Setup(f => f.Length).Returns(ms.Length);
 
         _mockXmlImportService.Setup(s => s.ImportContainerFromXmlAsync(It.IsAny<string>()))
             .ReturnsAsync(_testContainerDto);
@@ -287,7 +285,7 @@ public class ShippingContainersControllerTests
     {
         // Arrange
         var mockFile = new Mock<IFormFile>();
-        mockFile.Setup(_ => _.Length).Returns(0);
+        mockFile.Setup(f => f.Length).Returns(0);
 
         // Act
         var result = await _controller.ImportFromXmlFile(mockFile.Object);
@@ -302,8 +300,8 @@ public class ShippingContainersControllerTests
     {
         // Arrange
         var mockFile = new Mock<IFormFile>();
-        mockFile.Setup(_ => _.FileName).Returns("test.txt");
-        mockFile.Setup(_ => _.Length).Returns(100);
+        mockFile.Setup(f => f.FileName).Returns("test.txt");
+        mockFile.Setup(f => f.Length).Returns(100);
 
         // Act
         var result = await _controller.ImportFromXmlFile(mockFile.Object);
@@ -317,18 +315,18 @@ public class ShippingContainersControllerTests
     public async Task ImportFromXmlFile_WhenImportServiceThrowsArgumentException_ShouldReturnBadRequest()
     {
         // Arrange
+        const string content = "invalid xml";
+        const string fileName = "test.xml";
         var mockFile = new Mock<IFormFile>();
-        var content = "invalid xml";
-        var fileName = "test.xml";
         var ms = new MemoryStream();
         var writer = new StreamWriter(ms);
-        writer.Write(content);
-        writer.Flush();
+        await writer.WriteAsync(content);
+        await writer.FlushAsync();
         ms.Position = 0;
 
-        mockFile.Setup(_ => _.OpenReadStream()).Returns(ms);
-        mockFile.Setup(_ => _.FileName).Returns(fileName);
-        mockFile.Setup(_ => _.Length).Returns(ms.Length);
+        mockFile.Setup(f => f.OpenReadStream()).Returns(ms);
+        mockFile.Setup(f => f.FileName).Returns(fileName);
+        mockFile.Setup(f => f.Length).Returns(ms.Length);
 
         _mockXmlImportService.Setup(s => s.ImportContainerFromXmlAsync(It.IsAny<string>()))
             .ThrowsAsync(new ArgumentException("Invalid XML format"));
@@ -346,7 +344,7 @@ public class ShippingContainersControllerTests
     {
         // Arrange
         var containerId = _testContainerDto.Id;
-        var processingResult = new List<ParcelDto>();
+        List<ParcelDto> processingResult = [];
 
         _mockParcelProcessingService.Setup(s => s.ProcessContainerAsync(containerId))
             .ReturnsAsync(processingResult);

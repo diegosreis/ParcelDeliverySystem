@@ -45,7 +45,7 @@ A robust and scalable system for automating internal parcel handling in distribu
 - **xUnit** - Unit testing framework
 - **Moq** - Mocking framework for isolated testing
 - **Coverlet** - Code coverage analysis
-- **234+ Unit Tests** - Comprehensive test coverage
+- **238+ Unit Tests** - Comprehensive test coverage
 
 ### API & Documentation
 - **Swagger/OpenAPI** - Interactive API documentation
@@ -71,7 +71,7 @@ A robust and scalable system for automating internal parcel handling in distribu
 
 ```bash 
 # Clone and start the application
-git clone :diegosreis/ParcelDeliverySystem.git
+git clone git@github.com:diegosreis/ParcelDeliverySystem.git
 cd ParcelDeliverySystem
 ./docker-management.sh start
 ```
@@ -131,7 +131,7 @@ dotnet run
 
 2. **Clone and restore dependencies:**
    ```bash
-   git clone <repository-url>
+   git clone git@github.com:diegosreis/ParcelDeliverySystem.git
    cd ParcelDeliverySystem
    dotnet restore
    ```
@@ -261,7 +261,7 @@ ParcelDeliverySystem/
 - **Duplicate Detection**: Automatic detection and removal of duplicate parcels
 - **Data Integrity Validation**: Prevents conflicting container imports
 - **RESTful API**: Complete CRUD operations for all entities
-- **Comprehensive Testing**: 234+ unit tests with high coverage
+- **Comprehensive Testing**: 238+ unit tests with high coverage
 - **Docker Support**: One-command deployment and testing
 
 ---
@@ -391,11 +391,39 @@ curl -X PUT http://localhost:5227/api/Departments/{id} \
      -d '{"name":"Express","description":"Updated description"}'
 ```
 
-### Query Data
+### Query Containers with Flexible Detail Level
+
 ```bash
-# List containers
+# List containers (basic information)
 curl http://localhost:5227/api/ShippingContainers
 
+# List containers with detailed parcel information
+curl "http://localhost:5227/api/ShippingContainers?includeParcelDetails=true"
+
+# Get specific container (basic information)
+curl http://localhost:5227/api/ShippingContainers/{id}
+
+# Get specific container with detailed parcels
+curl "http://localhost:5227/api/ShippingContainers/{id}?includeParcelDetails=true"
+
+# Get containers by status (basic information)
+curl http://localhost:5227/api/ShippingContainers/by-status/Processing
+
+# Get containers by status with detailed parcels
+curl "http://localhost:5227/api/ShippingContainers/by-status/Processing?includeParcelDetails=true"
+
+# Get containers by date range (basic information)
+curl "http://localhost:5227/api/ShippingContainers/by-date-range?startDate=2024-01-01&endDate=2024-12-31"
+
+# Get containers by date range with detailed parcels
+curl "http://localhost:5227/api/ShippingContainers/by-date-range?startDate=2024-01-01&endDate=2024-12-31&includeParcelDetails=true"
+
+# Get container with full parcel details (dedicated endpoint)
+curl http://localhost:5227/api/ShippingContainers/{id}/with-parcels
+```
+
+### Query Parcels
+```bash
 # List parcels
 curl http://localhost:5227/api/Parcels
 

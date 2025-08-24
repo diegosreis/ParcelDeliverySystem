@@ -4,6 +4,7 @@ using Domain.Constants;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace Tests.Application.Services;
@@ -13,6 +14,7 @@ public class ParcelProcessingServiceTests
     private readonly Department _insuranceDepartment;
     private readonly Mock<IDepartmentRepository> _mockDepartmentRepository;
     private readonly Mock<IDepartmentRuleService> _mockDepartmentRuleService;
+    private readonly Mock<ILogger<ParcelProcessingService>> _mockLogger;
     private readonly Mock<IParcelRepository> _mockParcelRepository;
     private readonly Mock<IShippingContainerRepository> _mockShippingContainerRepository;
     private readonly ParcelProcessingService _service;
@@ -25,12 +27,14 @@ public class ParcelProcessingServiceTests
         _mockShippingContainerRepository = new Mock<IShippingContainerRepository>();
         _mockDepartmentRepository = new Mock<IDepartmentRepository>();
         _mockDepartmentRuleService = new Mock<IDepartmentRuleService>();
+        _mockLogger = new Mock<ILogger<ParcelProcessingService>>();
 
         _service = new ParcelProcessingService(
             _mockParcelRepository.Object,
             _mockShippingContainerRepository.Object,
             _mockDepartmentRepository.Object,
-            _mockDepartmentRuleService.Object);
+            _mockDepartmentRuleService.Object,
+            _mockLogger.Object);
 
         // Setup test data
         var testAddress = new Address(
@@ -46,7 +50,7 @@ public class ParcelProcessingServiceTests
 
         _testCustomer = new Customer("Test Customer", testAddress);
         _testDepartment = new Department("Mail", "Mail department");
-        _insuranceDepartment = new Department(DepartmentNames.Insurance, "Insurance department");
+        _insuranceDepartment = new Department(DefaultDepartmentNames.Insurance, "Insurance department");
     }
 
     [Fact]
@@ -85,13 +89,13 @@ public class ParcelProcessingServiceTests
     public async Task ProcessParcelAsync_WithHighValueParcel_ShouldRequireInsuranceApproval()
     {
         // Arrange
-        var parcel = new Parcel(_testCustomer, 0.5m, 1500m); // High value parcel
+        var parcel = new Parcel(_testCustomer, 0.5m, 1500m);
 
         _mockParcelRepository.Setup(r => r.GetByIdAsync(parcel.Id))
             .ReturnsAsync(parcel);
         _mockParcelRepository.Setup(r => r.UpdateAsync(It.IsAny<Parcel>()))
             .ReturnsAsync(parcel);
-        _mockDepartmentRepository.Setup(r => r.GetByNameAsync(DepartmentNames.Insurance))
+        _mockDepartmentRepository.Setup(r => r.GetByNameAsync(DefaultDepartmentNames.Insurance))
             .ReturnsAsync(_insuranceDepartment);
 
         // Act
@@ -100,7 +104,7 @@ public class ParcelProcessingServiceTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ParcelStatus.InsuranceApprovalRequired, result.Status);
-        _mockDepartmentRepository.Verify(r => r.GetByNameAsync(DepartmentNames.Insurance), Times.Once);
+        _mockDepartmentRepository.Verify(r => r.GetByNameAsync(DefaultDepartmentNames.Insurance), Times.Once);
         _mockParcelRepository.Verify(r => r.UpdateAsync(It.IsAny<Parcel>()), Times.Once);
     }
 

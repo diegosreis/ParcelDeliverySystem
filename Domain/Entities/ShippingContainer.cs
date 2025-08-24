@@ -18,7 +18,7 @@ public class ShippingContainer
         ShippingDate = Guard.NotDefault(shippingDate, nameof(shippingDate), FieldNames.ShippingDate);
 
         Parcels = [];
-        Status = ContainerStatus.Pending;
+        Status = ShippingContainerStatus.Pending;
         CreatedAt = DateTime.UtcNow;
     }
 
@@ -26,7 +26,7 @@ public class ShippingContainer
     public string ContainerId { get; private set; } = string.Empty;
     public DateTime ShippingDate { get; private set; }
     public List<Parcel> Parcels { get; }
-    public ContainerStatus Status { get; private set; }
+    public ShippingContainerStatus Status { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
@@ -57,7 +57,7 @@ public class ShippingContainer
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void UpdateStatus(ContainerStatus status)
+    public void UpdateStatus(ShippingContainerStatus status)
     {
         Status = status;
         UpdatedAt = DateTime.UtcNow;

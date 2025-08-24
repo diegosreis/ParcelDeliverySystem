@@ -3,6 +3,7 @@ using Domain.Constants;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services;
 
@@ -10,7 +11,8 @@ public class ParcelProcessingService(
     IParcelRepository parcelRepository,
     IShippingContainerRepository shippingContainerRepository,
     IDepartmentRepository departmentRepository,
-    IDepartmentRuleService departmentRuleService)
+    IDepartmentRuleService departmentRuleService,
+    ILogger<ParcelProcessingService> logger)
     : IParcelProcessingService
 {
     private readonly IDepartmentRepository _departmentRepository =
@@ -18,6 +20,9 @@ public class ParcelProcessingService(
 
     private readonly IDepartmentRuleService _departmentRuleService =
         departmentRuleService ?? throw new ArgumentNullException(nameof(departmentRuleService));
+
+    private readonly ILogger<ParcelProcessingService> _logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
 
     private readonly IParcelRepository _parcelRepository =
         parcelRepository ?? throw new ArgumentNullException(nameof(parcelRepository));
@@ -27,46 +32,86 @@ public class ParcelProcessingService(
 
     public async Task<ParcelDto> ProcessParcelAsync(Guid parcelId)
     {
+        _logger.LogInformation("Starting parcel processing for ParcelId: {ParcelId}", parcelId);
+
         var parcel = await _parcelRepository.GetByIdAsync(parcelId);
         if (parcel == null)
+        {
+            _logger.LogError("Parcel processing failed: Parcel with ID {ParcelId} not found", parcelId);
             throw new ArgumentException($"Parcel with ID {parcelId} not found");
-
-        // Update status to processing
-        parcel.UpdateStatus(ParcelStatus.Processing);
-
-        // Check if insurance approval is required
-        if (parcel.RequiresInsuranceApproval)
-        {
-            parcel.UpdateStatus(ParcelStatus.InsuranceApprovalRequired);
-            var insuranceDept = await _departmentRepository.GetByNameAsync(DepartmentNames.Insurance);
-            if (insuranceDept != null) parcel.AssignDepartment(insuranceDept);
-        }
-        else
-        {
-            // Assign departments based on rules using DepartmentRuleService
-            await AssignDepartmentsByRulesAsync(parcel);
-            parcel.UpdateStatus(ParcelStatus.AssignedToDepartment);
         }
 
-        var updatedParcel = await _parcelRepository.UpdateAsync(parcel);
-        return MapToParcelDto(updatedParcel);
+        try
+        {
+            _logger.LogDebug("Updating parcel status to Processing for ParcelId: {ParcelId}", parcelId);
+            parcel.UpdateStatus(ParcelStatus.Processing);
+
+            if (parcel.RequiresInsuranceApproval)
+            {
+                _logger.LogInformation("Parcel requires insurance approval. ParcelId: {ParcelId}, Value: {Value}",
+                    parcelId, parcel.Value);
+
+                parcel.UpdateStatus(ParcelStatus.InsuranceApprovalRequired);
+                var insuranceDept = await _departmentRepository.GetByNameAsync(DefaultDepartmentNames.Insurance);
+                if (insuranceDept != null)
+                {
+                    parcel.AssignDepartment(insuranceDept);
+                    _logger.LogInformation("Assigned insurance department to parcel. ParcelId: {ParcelId}", parcelId);
+                }
+            }
+            else
+            {
+                _logger.LogDebug("Assigning departments based on business rules for ParcelId: {ParcelId}", parcelId);
+                await AssignDepartmentsByRulesAsync(parcel);
+                parcel.UpdateStatus(ParcelStatus.AssignedToDepartment);
+                _logger.LogInformation("Parcel assigned to departments successfully. ParcelId: {ParcelId}", parcelId);
+            }
+
+            var updatedParcel = await _parcelRepository.UpdateAsync(parcel);
+            _logger.LogInformation(
+                "Parcel processing completed successfully. ParcelId: {ParcelId}, FinalStatus: {Status}",
+                parcelId, updatedParcel.Status);
+
+            return MapToParcelDto(updatedParcel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process parcel. ParcelId: {ParcelId}", parcelId);
+            throw;
+        }
     }
 
     public async Task<IEnumerable<ParcelDto>> ProcessContainerAsync(Guid containerId)
     {
+        _logger.LogInformation("Starting container processing for ContainerId: {ContainerId}", containerId);
+
         var container = await _shippingContainerRepository.GetByIdAsync(containerId);
         if (container == null)
-            throw new ArgumentException($"Container with ID {containerId} not found");
-
-        var processedParcels = new List<ParcelDto>();
-
-        foreach (var parcel in container.Parcels)
         {
-            var processedParcel = await ProcessParcelAsync(parcel.Id);
-            processedParcels.Add(processedParcel);
+            _logger.LogError("Container processing failed: Container with ID {ContainerId} not found", containerId);
+            throw new ArgumentException($"Container with ID {containerId} not found");
         }
 
-        return processedParcels;
+        try
+        {
+            _logger.LogInformation("Processing {ParcelCount} parcels in container. ContainerId: {ContainerId}",
+                container.Parcels.Count, containerId);
+
+            var processedParcels = await Task.WhenAll(
+                container.Parcels.Select(async parcel => await ProcessParcelAsync(parcel.Id))
+            );
+
+            _logger.LogInformation(
+                "Container processing completed successfully. ContainerId: {ContainerId}, ProcessedParcels: {Count}",
+                containerId, processedParcels.Length);
+
+            return processedParcels;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process container. ContainerId: {ContainerId}", containerId);
+            throw;
+        }
     }
 
     public async Task<ParcelDto> AssignDepartmentAsync(Guid parcelId, Guid departmentId)

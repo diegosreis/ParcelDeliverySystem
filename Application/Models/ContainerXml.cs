@@ -2,7 +2,7 @@ using System.Xml.Serialization;
 
 namespace Application.Models;
 
-[XmlRoot("Container")]
+[XmlRoot("Container", Namespace = "")]
 public class ContainerXml
 {
     [XmlElement("Id")] public string Id { get; set; } = string.Empty;

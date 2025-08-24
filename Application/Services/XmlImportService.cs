@@ -2,19 +2,25 @@ using System.Xml;
 using System.Xml.Serialization;
 using Application.DTOs;
 using Application.Models;
+using Domain.Constants;
 using Domain.Entities;
 using Domain.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services;
 
 public class XmlImportService(
     IShippingContainerRepository shippingContainerRepository,
     IParcelRepository parcelRepository,
-    IDepartmentRepository departmentRepository)
+    IDepartmentRepository departmentRepository,
+    ILogger<XmlImportService> logger)
     : IXmlImportService
 {
     private readonly IDepartmentRepository _departmentRepository =
         departmentRepository ?? throw new ArgumentNullException(nameof(departmentRepository));
+
+    private readonly ILogger<XmlImportService> _logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
 
     private readonly IParcelRepository _parcelRepository =
         parcelRepository ?? throw new ArgumentNullException(nameof(parcelRepository));
@@ -25,16 +31,26 @@ public class XmlImportService(
     public Task<bool> ValidateXmlContentAsync(string xmlContent)
     {
         if (string.IsNullOrWhiteSpace(xmlContent))
+        {
+            _logger.LogWarning("XML content validation failed: content is null or empty");
             return Task.FromResult(false);
+        }
 
         try
         {
+            _logger.LogDebug("Starting XML content validation");
             var containerXml = DeserializeXml(xmlContent);
-            return Task.FromResult(!string.IsNullOrWhiteSpace(containerXml.Id) &&
-                                   containerXml.Parcels.Count != 0);
+            var isValid = !string.IsNullOrWhiteSpace(containerXml.Id) && containerXml.Parcels.Count != 0;
+
+            _logger.LogInformation(
+                "XML content validation completed. Valid: {IsValid}, ContainerId: {ContainerId}, ParcelCount: {ParcelCount}",
+                isValid, containerXml.Id, containerXml.Parcels.Count);
+
+            return Task.FromResult(isValid);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "XML content validation failed due to parsing error");
             return Task.FromResult(false);
         }
     }
@@ -42,17 +58,31 @@ public class XmlImportService(
     public async Task<ShippingContainerWithParcelsDto> ImportContainerFromXmlAsync(string xmlContent)
     {
         if (string.IsNullOrWhiteSpace(xmlContent))
+        {
+            _logger.LogError("Import failed: XML content cannot be empty");
             throw new ArgumentException("XML content cannot be empty", nameof(xmlContent));
+        }
 
         try
         {
-            var containerXml = DeserializeXml(xmlContent);
-            var container = await CreateContainerFromXmlAsync(containerXml);
+            _logger.LogInformation("Starting container import from XML");
 
-            return MapToContainerWithParcelsDto(container);
+            var containerXml = DeserializeXml(xmlContent);
+            _logger.LogDebug("XML deserialized successfully. ContainerId: {ContainerId}, ParcelCount: {ParcelCount}",
+                containerXml.Id, containerXml.Parcels.Count);
+
+            var container = await CreateContainerFromXmlAsync(containerXml);
+            var result = MapToShippingContainerWithParcelsDto(container);
+
+            _logger.LogInformation(
+                "Container import completed successfully. ContainerId: {ContainerId}, ImportedParcels: {ParcelCount}",
+                container.Id, container.Parcels.Count);
+
+            return result;
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to import container from XML");
             throw new InvalidOperationException($"Failed to import container from XML: {ex.Message}", ex);
         }
     }
@@ -125,22 +155,66 @@ public class XmlImportService(
 
         // Create parcel
         var parcel = new Parcel(customer, parcelXml.Weight, parcelXml.Value);
+        parcel = await _parcelRepository.AddAsync(parcel);
 
-        return await _parcelRepository.AddAsync(parcel);
+        // Determine and assign appropriate departments based on business rules
+        await AssignDepartmentsToParcelAsync(parcel);
+
+        return parcel;
     }
 
-    private static ShippingContainerWithParcelsDto MapToContainerWithParcelsDto(ShippingContainer container)
+    private async Task AssignDepartmentsToParcelAsync(Parcel parcel)
+    {
+        var departments = new List<Department>();
+
+        switch (parcel.Weight)
+        {
+            // Weight-based department assignment
+            case <= 1:
+            {
+                var mailDept = await _departmentRepository.GetByNameAsync(DefaultDepartmentNames.Mail);
+                if (mailDept != null) departments.Add(mailDept);
+                break;
+            }
+            case <= 10:
+            {
+                var regularDept = await _departmentRepository.GetByNameAsync(DefaultDepartmentNames.Regular);
+                if (regularDept != null) departments.Add(regularDept);
+                break;
+            }
+            default:
+            {
+                var heavyDept = await _departmentRepository.GetByNameAsync(DefaultDepartmentNames.Heavy);
+                if (heavyDept != null) departments.Add(heavyDept);
+                break;
+            }
+        }
+
+        // Value-based department assignment (Insurance)
+        if (parcel.Value > 1000)
+        {
+            var insuranceDept = await _departmentRepository.GetByNameAsync(DefaultDepartmentNames.Insurance);
+            if (insuranceDept != null) departments.Add(insuranceDept);
+        }
+
+        // Assign departments to parcel (using correct method name)
+        foreach (var department in departments) parcel.AssignDepartment(department);
+
+        _logger.LogInformation(
+            "Assigned parcel {ParcelId} to departments: {Departments}",
+            parcel.Id,
+            string.Join(", ", departments.Select(d => d.Name))
+        );
+    }
+
+    private static ShippingContainerWithParcelsDto MapToShippingContainerWithParcelsDto(ShippingContainer container)
     {
         return new ShippingContainerWithParcelsDto(
             container.Id,
             container.ContainerId,
             container.ShippingDate,
             container.Status,
-            container.Parcels.Select(MapToParcelDto).ToList(),
-            container.TotalParcels,
-            container.TotalWeight,
-            container.TotalValue,
-            container.ParcelsRequiringInsurance,
+            container.Parcels.Select(MapToParcelDto),
             container.CreatedAt,
             container.UpdatedAt
         );

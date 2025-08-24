@@ -54,7 +54,7 @@ public class Address
 
     public string GetFormattedAddress()
     {
-        var parts = new List<string>
+        var parts = new[]
         {
             $"{Street}, {Number}",
             Complement,

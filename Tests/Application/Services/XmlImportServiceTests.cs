@@ -2,6 +2,7 @@ using Application.Services;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace Tests.Application.Services;
@@ -42,8 +43,8 @@ public class XmlImportServiceTests
                                              """;
 
     private readonly Mock<IDepartmentRepository> _mockDepartmentRepository;
+    private readonly Mock<ILogger<XmlImportService>> _mockLogger;
     private readonly Mock<IParcelRepository> _mockParcelRepository;
-
     private readonly Mock<IShippingContainerRepository> _mockShippingContainerRepository;
     private readonly XmlImportService _xmlImportService;
 
@@ -52,11 +53,13 @@ public class XmlImportServiceTests
         _mockShippingContainerRepository = new Mock<IShippingContainerRepository>();
         _mockParcelRepository = new Mock<IParcelRepository>();
         _mockDepartmentRepository = new Mock<IDepartmentRepository>();
+        _mockLogger = new Mock<ILogger<XmlImportService>>();
 
         _xmlImportService = new XmlImportService(
             _mockShippingContainerRepository.Object,
             _mockParcelRepository.Object,
-            _mockDepartmentRepository.Object);
+            _mockDepartmentRepository.Object,
+            _mockLogger.Object);
     }
 
     [Fact]
@@ -64,7 +67,8 @@ public class XmlImportServiceTests
     {
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
-            new XmlImportService(null!, _mockParcelRepository.Object, _mockDepartmentRepository.Object));
+            new XmlImportService(null!, _mockParcelRepository.Object, _mockDepartmentRepository.Object,
+                _mockLogger.Object));
     }
 
     [Fact]
@@ -72,7 +76,8 @@ public class XmlImportServiceTests
     {
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
-            new XmlImportService(_mockShippingContainerRepository.Object, null!, _mockDepartmentRepository.Object));
+            new XmlImportService(_mockShippingContainerRepository.Object, null!, _mockDepartmentRepository.Object,
+                _mockLogger.Object));
     }
 
     [Fact]
@@ -80,7 +85,17 @@ public class XmlImportServiceTests
     {
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
-            new XmlImportService(_mockShippingContainerRepository.Object, _mockParcelRepository.Object, null!));
+            new XmlImportService(_mockShippingContainerRepository.Object, _mockParcelRepository.Object, null!,
+                _mockLogger.Object));
+    }
+
+    [Fact]
+    public void Constructor_WithNullLogger_ShouldThrowArgumentNullException()
+    {
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() =>
+            new XmlImportService(_mockShippingContainerRepository.Object, _mockParcelRepository.Object,
+                _mockDepartmentRepository.Object, null!));
     }
 
     [Fact]
@@ -155,7 +170,7 @@ public class XmlImportServiceTests
         Assert.NotNull(result);
         Assert.Equal("Container_68465468", result.ContainerId);
         Assert.Equal(new DateTime(2019, 3, 7), result.ShippingDate);
-        Assert.Equal(ContainerStatus.Pending, result.Status);
+        Assert.Equal(ShippingContainerStatus.Pending, result.Status);
     }
 
     [Fact]
@@ -188,7 +203,7 @@ public class XmlImportServiceTests
                                         <parcels>
                                             <Parcel>
                                                 <Receipient>
-                                    """; // XML mal formado e incompleto
+                                    """;
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>

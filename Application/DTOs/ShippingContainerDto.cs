@@ -6,7 +6,7 @@ public record ShippingContainerDto(
     Guid Id,
     string ContainerId,
     DateTime ShippingDate,
-    ContainerStatus Status,
+    ShippingContainerStatus Status,
     int TotalParcels,
     decimal TotalWeight,
     decimal TotalValue,
@@ -22,19 +22,21 @@ public record CreateShippingContainerDto(
 
 public record UpdateShippingContainerDto(
     DateTime ShippingDate,
-    ContainerStatus Status
+    ShippingContainerStatus Status
 );
 
 public record ShippingContainerWithParcelsDto(
     Guid Id,
     string ContainerId,
     DateTime ShippingDate,
-    ContainerStatus Status,
-    List<ParcelDto> Parcels,
-    int TotalParcels,
-    decimal TotalWeight,
-    decimal TotalValue,
-    int ParcelsRequiringInsurance,
+    ShippingContainerStatus Status,
+    IEnumerable<ParcelDto> Parcels,
     DateTime CreatedAt,
     DateTime? UpdatedAt
-);
+)
+{
+    public int TotalParcels => Parcels.Count();
+    public decimal TotalWeight => Parcels.Sum(p => p.Weight);
+    public decimal TotalValue => Parcels.Sum(p => p.Value);
+    public int ParcelsRequiringInsurance => Parcels.Count(p => p.Value > 1000);
+}

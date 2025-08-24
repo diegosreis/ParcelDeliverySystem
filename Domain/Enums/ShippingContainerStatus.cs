@@ -1,6 +1,6 @@
 namespace Domain.Enums;
 
-public enum ContainerStatus
+public enum ShippingContainerStatus
 {
     Pending = 0,
     Processing = 1,

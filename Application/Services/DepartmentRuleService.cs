@@ -33,22 +33,18 @@ public class DepartmentRuleService(
         if (parcel == null)
             throw new ArgumentException($"Parcel with ID {parcelId} not found");
 
-        var departments = new List<DepartmentDto>();
-
         // Apply weight-based rules
         var weightDepartments = await GetDepartmentsByWeightAsync(parcel.Weight);
-        departments.AddRange(weightDepartments);
 
         // Apply value-based rules
         var valueDepartments = await GetDepartmentsByValueAsync(parcel.Value);
-        departments.AddRange(valueDepartments);
 
-        return departments.DistinctBy(d => d.Id);
+        // Combine and remove duplicates using LINQ
+        return weightDepartments.Concat(valueDepartments).DistinctBy(d => d.Id);
     }
 
     public async Task<IEnumerable<DepartmentDto>> GetDepartmentsByWeightAsync(decimal weight)
     {
-        var departments = new List<DepartmentDto>();
         var weightRules = await _businessRuleRepository.GetActiveRulesByTypeAsync(BusinessRuleType.Weight);
 
         foreach (var rule in weightRules.OrderBy(r => r.MinValue))
@@ -56,78 +52,53 @@ public class DepartmentRuleService(
             {
                 var department = await _departmentRepository.GetByNameAsync(rule.TargetDepartment);
                 if (department == null) continue;
-                departments.Add(MapToDepartmentDto(department));
-                break; // Take the first matching rule
+                return [MapToDepartmentDto(department)]; // Return single item as array
             }
 
         // Fallback to default rules if no business rules configured
-        if (departments.Count == 0) departments.AddRange(await GetDefaultDepartmentsByWeightAsync(weight));
-
-        return departments;
+        return await GetDefaultDepartmentsByWeightAsync(weight);
     }
 
     public async Task<IEnumerable<DepartmentDto>> GetDepartmentsByValueAsync(decimal value)
     {
-        var departments = new List<DepartmentDto>();
         var valueRules = await _businessRuleRepository.GetActiveRulesByTypeAsync(BusinessRuleType.Value);
+        var matchingDepartments = new List<DepartmentDto>();
 
         foreach (var rule in valueRules.OrderBy(r => r.MinValue))
-            if (value >= rule.MinValue &&
-                (rule.MaxValue == null || value <= rule.MaxValue))
+            if (value >= rule.MinValue && (rule.MaxValue == null || value <= rule.MaxValue))
             {
                 var department = await _departmentRepository.GetByNameAsync(rule.TargetDepartment);
-                if (department != null) departments.Add(MapToDepartmentDto(department));
+                if (department != null)
+                    matchingDepartments.Add(MapToDepartmentDto(department));
             }
 
         // Fallback to default rules if no business rules configured
-        if (departments.Count == 0) departments.AddRange(await GetDefaultDepartmentsByValueAsync(value));
-
-        return departments;
+        return matchingDepartments.Count > 0 ? matchingDepartments : await GetDefaultDepartmentsByValueAsync(value);
     }
 
     // Default business rules when no custom rules are configured
     private async Task<IEnumerable<DepartmentDto>> GetDefaultDepartmentsByWeightAsync(decimal weight)
     {
-        var departments = new List<DepartmentDto>();
-
-        switch (weight)
+        return weight switch
         {
-            case <= 1m:
-            {
-                var mailDept = await _departmentRepository.GetByNameAsync(DepartmentNames.Mail);
-                if (mailDept != null)
-                    departments.Add(MapToDepartmentDto(mailDept));
-                break;
-            }
-            case <= 10m:
-            {
-                var regularDept = await _departmentRepository.GetByNameAsync(DepartmentNames.Regular);
-                if (regularDept != null)
-                    departments.Add(MapToDepartmentDto(regularDept));
-                break;
-            }
-            default:
-            {
-                var heavyDept = await _departmentRepository.GetByNameAsync(DepartmentNames.Heavy);
-                if (heavyDept != null)
-                    departments.Add(MapToDepartmentDto(heavyDept));
-                break;
-            }
-        }
-
-        return departments;
+            <= 1m => await GetSingleDepartmentAsync(DefaultDepartmentNames.Mail),
+            <= 10m => await GetSingleDepartmentAsync(DefaultDepartmentNames.Regular),
+            _ => await GetSingleDepartmentAsync(DefaultDepartmentNames.Heavy)
+        };
     }
 
     private async Task<IEnumerable<DepartmentDto>> GetDefaultDepartmentsByValueAsync(decimal value)
     {
-        var departments = new List<DepartmentDto>();
+        if (value <= 1000m)
+            return [];
 
-        if (value <= 1000m) return departments;
-        var insuranceDept = await _departmentRepository.GetByNameAsync(DepartmentNames.Insurance);
-        if (insuranceDept != null)
-            departments.Add(MapToDepartmentDto(insuranceDept));
+        return await GetSingleDepartmentAsync(DefaultDepartmentNames.Insurance);
+    }
 
-        return departments;
+    private async Task<IEnumerable<DepartmentDto>> GetSingleDepartmentAsync(string departmentName)
+    {
+        var department = await _departmentRepository.GetByNameAsync(departmentName);
+        return department != null ? [MapToDepartmentDto(department)] : [];
     }
 
     private static DepartmentDto MapToDepartmentDto(Department department)

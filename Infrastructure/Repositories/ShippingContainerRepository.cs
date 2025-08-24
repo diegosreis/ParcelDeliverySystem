@@ -17,7 +17,7 @@ public class ShippingContainerRepository : InMemoryRepository<ShippingContainer>
         }
     }
 
-    public async Task<IEnumerable<ShippingContainer>> GetByStatusAsync(ContainerStatus status)
+    public async Task<IEnumerable<ShippingContainer>> GetByStatusAsync(ShippingContainerStatus status)
     {
         await Task.CompletedTask;
         lock (Lock)

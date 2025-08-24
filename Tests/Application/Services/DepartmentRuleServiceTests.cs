@@ -50,14 +50,14 @@ public class DepartmentRuleServiceTests
         // Arrange
         var parcelId = Guid.NewGuid();
         var parcel = new Parcel(_testCustomer, 5.5m, 1500.0m);
-        var insuranceDept = new Department(DepartmentNames.Insurance, "Insurance Department");
+        var insuranceDept = new Department(DefaultDepartmentNames.Insurance, "Insurance Department");
 
         _mockParcelRepository.Setup(r => r.GetByIdAsync(parcelId))
             .ReturnsAsync(parcel);
-        _mockDepartmentRepository.Setup(r => r.GetByNameAsync(DepartmentNames.Insurance))
+        _mockDepartmentRepository.Setup(r => r.GetByNameAsync(DefaultDepartmentNames.Insurance))
             .ReturnsAsync(insuranceDept);
-        _mockDepartmentRepository.Setup(r => r.GetByNameAsync(DepartmentNames.Regular))
-            .ReturnsAsync(new Department(DepartmentNames.Regular, "Regular Department"));
+        _mockDepartmentRepository.Setup(r => r.GetByNameAsync(DefaultDepartmentNames.Regular))
+            .ReturnsAsync(new Department(DefaultDepartmentNames.Regular, "Regular Department"));
 
         // Act
         var result = await _service.DetermineRequiredDepartmentsAsync(parcelId);
@@ -65,8 +65,8 @@ public class DepartmentRuleServiceTests
         // Assert
         var departmentDtos = result.ToList();
         Assert.NotEmpty(departmentDtos);
-        Assert.Contains(departmentDtos, d => d.Name == DepartmentNames.Insurance);
-        Assert.Contains(departmentDtos, d => d.Name == DepartmentNames.Regular);
+        Assert.Contains(departmentDtos, d => d.Name == DefaultDepartmentNames.Insurance);
+        Assert.Contains(departmentDtos, d => d.Name == DefaultDepartmentNames.Regular);
     }
 
     [Fact]
@@ -75,11 +75,11 @@ public class DepartmentRuleServiceTests
         // Arrange
         var parcelId = Guid.NewGuid();
         var parcel = new Parcel(_testCustomer, 5.5m, 500.0m);
-        var regularDept = new Department(DepartmentNames.Regular, "Regular Department");
+        var regularDept = new Department(DefaultDepartmentNames.Regular, "Regular Department");
 
         _mockParcelRepository.Setup(r => r.GetByIdAsync(parcelId))
             .ReturnsAsync(parcel);
-        _mockDepartmentRepository.Setup(r => r.GetByNameAsync(DepartmentNames.Regular))
+        _mockDepartmentRepository.Setup(r => r.GetByNameAsync(DefaultDepartmentNames.Regular))
             .ReturnsAsync(regularDept);
 
         // Act
@@ -88,17 +88,17 @@ public class DepartmentRuleServiceTests
         // Assert
         var departmentDtos = result.ToList();
         Assert.NotEmpty(departmentDtos);
-        Assert.DoesNotContain(departmentDtos, d => d.Name == DepartmentNames.Insurance);
-        Assert.Contains(departmentDtos, d => d.Name == DepartmentNames.Regular);
+        Assert.DoesNotContain(departmentDtos, d => d.Name == DefaultDepartmentNames.Insurance);
+        Assert.Contains(departmentDtos, d => d.Name == DefaultDepartmentNames.Regular);
     }
 
     [Theory]
-    [InlineData(0.5, DepartmentNames.Mail)]
-    [InlineData(1.0, DepartmentNames.Mail)]
-    [InlineData(5.0, DepartmentNames.Regular)]
-    [InlineData(10.0, DepartmentNames.Regular)]
-    [InlineData(15.0, DepartmentNames.Heavy)]
-    [InlineData(100.0, DepartmentNames.Heavy)]
+    [InlineData(0.5, DefaultDepartmentNames.Mail)]
+    [InlineData(1.0, DefaultDepartmentNames.Mail)]
+    [InlineData(5.0, DefaultDepartmentNames.Regular)]
+    [InlineData(10.0, DefaultDepartmentNames.Regular)]
+    [InlineData(15.0, DefaultDepartmentNames.Heavy)]
+    [InlineData(100.0, DefaultDepartmentNames.Heavy)]
     public async Task GetDepartmentsByWeightAsync_ShouldReturnCorrectDepartment(decimal weight, string expectedDept)
     {
         // Arrange
@@ -124,8 +124,8 @@ public class DepartmentRuleServiceTests
         bool shouldIncludeInsurance)
     {
         // Arrange
-        var insuranceDept = new Department(DepartmentNames.Insurance, "Insurance Department");
-        _mockDepartmentRepository.Setup(r => r.GetByNameAsync(DepartmentNames.Insurance))
+        var insuranceDept = new Department(DefaultDepartmentNames.Insurance, "Insurance Department");
+        _mockDepartmentRepository.Setup(r => r.GetByNameAsync(DefaultDepartmentNames.Insurance))
             .ReturnsAsync(insuranceDept);
 
         // Act
@@ -136,7 +136,7 @@ public class DepartmentRuleServiceTests
         {
             var departmentDtos = result as DepartmentDto[] ?? result.ToArray();
             Assert.Single(departmentDtos);
-            Assert.Equal(DepartmentNames.Insurance, departmentDtos.First().Name);
+            Assert.Equal(DefaultDepartmentNames.Insurance, departmentDtos.First().Name);
         }
         else
         {

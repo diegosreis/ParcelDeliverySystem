@@ -56,6 +56,10 @@ A robust and scalable system for automating internal parcel handling in distribu
 - **Docker** - Containerization for consistent deployment
 - **Docker Compose** - Multi-container orchestration
 - **In-Memory Storage** - Simplified data persistence without database dependency
+- **GitHub Actions** - Automated CI/CD pipeline for Azure deployment
+
+### Live Demo
+- **Production**: Available at https://diegoreis-parcel.azurewebsites.net/
 
 ### Code Quality & Standards
 - **Primary Constructors** - C# 13 language features
@@ -202,26 +206,38 @@ This project follows **Clean Architecture** principles with clear separation of 
 
 ```
 ParcelDeliverySystem/
+├── .github/                      # GitHub Actions workflows
+│   └── workflows/               # CI/CD pipeline definitions
 ├── Api/                          # Web API Layer
 │   ├── Controllers/              # REST API Controllers
+│   ├── Properties/              # Launch settings and configurations
 │   ├── Program.cs               # Application entry point & DI configuration
-│   └── appsettings.json         # Configuration
+│   ├── appsettings.json         # Application configuration
+│   ├── appsettings.Development.json # Development-specific settings
+│   └── Api.http                 # HTTP request examples
 ├── Application/                  # Application Layer
 │   ├── DTOs/                    # Data Transfer Objects
 │   ├── Services/                # Business logic services
-│   └── Models/                  # Application models
+│   └── Models/                  # Application models (XML mapping, results)
 ├── Domain/                       # Domain Layer
 │   ├── Entities/                # Core business entities
 │   ├── Enums/                   # Domain enumerations
-│   ├── Constants/               # Domain constants
-│   └── Interfaces/              # Domain interfaces
+│   ├── Constants/               # Domain constants (department names, rules)
+│   ├── Interfaces/              # Domain interfaces (repositories, services)
+│   ├── Exceptions/              # Domain-specific exceptions
+│   └── Validation/              # Domain validation logic
 ├── Infrastructure/              # Infrastructure Layer
-│   └── Repositories/            # Data access implementations
+│   └── Repositories/            # Data access implementations (in-memory)
 ├── Tests/                       # Test Projects
-│   ├── Api/                     # API layer tests
-│   ├── Application/             # Application layer tests
-│   └── Domain/                  # Domain layer tests
-└── Container_2-MSX.xml          # Sample XML file for testing
+│   ├── Api/                     # API layer tests (controllers)
+│   ├── Application/             # Application layer tests (services)
+│   └── Domain/                  # Domain layer tests (entities)
+├── Container_2-MSX.xml          # Sample XML file for testing
+├── Dockerfile                   # Docker container definition
+├── docker-compose.yml          # Multi-container orchestration
+├── docker-management.sh        # Docker management script
+├── coverlet.runsettings        # Code coverage configuration
+└── ParcelDeliverySystem.sln    # Solution file
 ```
 
 ### Architecture Decision Rationale
